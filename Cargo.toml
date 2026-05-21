@@ -1,0 +1,24 @@
+[workspace]
+members = ["crates/*"]
+resolver = "2"
+
+[workspace.dependencies]
+tokio = { version = "1.52.3", features = ["full"] }
+axum = { version = "0.8.9", features = ["macros"] }
+serde = { version = "1.0.228", features = ["derive"] }
+thiserror = "2"
+anyhow = "1.0.102"
+sqlx = { version = "0.8.6", features = ["runtime-tokio-rustls", "postgres", "uuid", "chrono", "migrate"] }
+dotenvy = "0.15.7"
+config = "0.15.23"
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+secrecy = { version = "0.10", features = ["serde"] }
+tower = "0.5"
+http-body-util = "0.1"
+
+[profile.release]
+opt-level = "z"    # optimize for size
+lto = true         # link-time optimization
+codegen-units = 1  # better optimization, slower compile
+strip = true       # strip debug symbols

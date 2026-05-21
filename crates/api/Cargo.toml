@@ -1,0 +1,18 @@
+[package]
+name = "api"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+tokio.workspace = true
+axum.workspace = true
+anyhow.workspace = true
+tracing.workspace = true
+# crate workspace
+shared = { path = "../shared" }
+infra = { path = "../infra" }
+
+[dev-dependencies]
+tower.workspace = true
+sqlx.workspace = true
+secrecy.workspace = true
