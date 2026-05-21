@@ -8,6 +8,8 @@ tokio.workspace = true
 axum.workspace = true
 anyhow.workspace = true
 tracing.workspace = true
+utoipa.workspace = true
+utoipa-swagger-ui.workspace = true
 # crate workspace
 shared = { path = "../shared" }
 infra = { path = "../infra" }
