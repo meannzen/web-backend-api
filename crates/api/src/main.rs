@@ -11,6 +11,7 @@ async fn main() -> anyhow::Result<()> {
     observability::init_tracing(&config.server.log_level);
 
     let db = Database::connect(&config.database.url, config.database.max_connections).await?;
+    db.migrate().await?;
     let state = AppState::new(config, db);
 
     let addr = format!("127.0.0.1:{}", state.config.server.port);

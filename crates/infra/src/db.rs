@@ -29,6 +29,13 @@ impl Database {
         &self.0
     }
 
+    pub async fn migrate(&self) -> anyhow::Result<()> {
+        sqlx::migrate!("../../migrations")
+            .run(&self.0)
+            .await
+            .context("failed to run migrations")
+    }
+
     pub async fn ping(&self) -> bool {
         sqlx::query("SELECT 1").execute(&self.0).await.is_ok()
     }
