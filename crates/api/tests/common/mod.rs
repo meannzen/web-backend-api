@@ -37,13 +37,7 @@ impl TestApp {
     }
 
     pub async fn get(&self, uri: &str) -> Response<Body> {
-        self.request(
-            Request::builder()
-                .uri(uri)
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
+        self.request(Request::builder().uri(uri).body(Body::empty()).unwrap())
+            .await
     }
 }
-
