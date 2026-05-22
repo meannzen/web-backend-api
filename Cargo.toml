@@ -16,6 +16,7 @@ tracing = "0.1.44"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 secrecy = { version = "0.10", features = ["serde"] }
 tower = "0.5"
+tower-http = { version = "0.6", features = ["trace", "request-id", "util"] }
 tokio-util = { version = "0.7", features = ["rt"] }
 http-body-util = "0.1"
 uuid = { version = "1", features = ["v4", "serde"] }
@@ -25,9 +26,6 @@ async-trait = "0.1"
 validator = { version = "0.19", features = ["derive"] }
 utoipa = { version = "5.5.0", features = ["axum_extras", "uuid", "chrono"] }
 utoipa-swagger-ui = { version = "9", features = ["axum"] }
-
-[env]
-SQLX_OFFLINE = "true"
 
 [profile.release]
 opt-level = "z"    # optimize for size

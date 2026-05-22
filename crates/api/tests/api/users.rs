@@ -72,6 +72,59 @@ async fn create_user_returns_400_on_short_password() {
     assert!(body["error"]["fields"]["password"].is_array());
 }
 
+// --- list users ---
+
+#[sqlx::test(migrations = "../../migrations")]
+async fn list_users_returns_empty_list(pool: PgPool) {
+    let app = TestApp::new(pool);
+    let response = app.get("/api/v1/users").await;
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body = body_json(response).await;
+    assert_eq!(body["data"], serde_json::json!([]));
+    assert_eq!(body["meta"]["page"], 1);
+    assert_eq!(body["meta"]["total"], 0);
+}
+
+#[sqlx::test(migrations = "../../migrations")]
+async fn list_users_returns_created_users(pool: PgPool) {
+    let app = TestApp::new(pool);
+
+    app.post("/api/v1/users", &json!({ "email": "a@example.com", "password": "secret123" }))
+        .await;
+    app.post("/api/v1/users", &json!({ "email": "b@example.com", "password": "secret123" }))
+        .await;
+
+    let response = app.get("/api/v1/users").await;
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body = body_json(response).await;
+    assert_eq!(body["meta"]["total"], 2);
+    assert_eq!(body["data"].as_array().unwrap().len(), 2);
+}
+
+#[sqlx::test(migrations = "../../migrations")]
+async fn list_users_respects_pagination(pool: PgPool) {
+    let app = TestApp::new(pool);
+
+    for i in 0..5 {
+        app.post(
+            "/api/v1/users",
+            &json!({ "email": format!("user{}@example.com", i), "password": "secret123" }),
+        )
+        .await;
+    }
+
+    let response = app.get("/api/v1/users?page=1&per_page=2").await;
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body = body_json(response).await;
+    assert_eq!(body["data"].as_array().unwrap().len(), 2);
+    assert_eq!(body["meta"]["total"], 5);
+    assert_eq!(body["meta"]["total_pages"], 3);
+}
+
 // --- get user ---
 
 #[sqlx::test(migrations = "../../migrations")]

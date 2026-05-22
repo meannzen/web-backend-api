@@ -99,4 +99,35 @@ impl UserRepository for PgUserRepository {
 
         User::try_from(row).map_err(UserError::Internal)
     }
+
+    async fn list(&self, offset: u32, limit: u32) -> Result<(Vec<User>, u64), UserError> {
+        let rows = sqlx::query_as!(
+            UserRow,
+            r#"
+            SELECT id, email, password_hash, created_at, updated_at
+            FROM users
+            ORDER BY created_at DESC
+            LIMIT $1 OFFSET $2
+            "#,
+            limit as i64,
+            offset as i64,
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|e| UserError::Internal(anyhow::anyhow!(e).context("failed to list users")))?;
+
+        let total = sqlx::query_scalar!("SELECT COUNT(*) FROM users")
+            .fetch_one(&self.pool)
+            .await
+            .map_err(|e| UserError::Internal(anyhow::anyhow!(e).context("failed to count users")))?
+            .unwrap_or(0) as u64;
+
+        let users = rows
+            .into_iter()
+            .map(User::try_from)
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(UserError::Internal)?;
+
+        Ok((users, total))
+    }
 }

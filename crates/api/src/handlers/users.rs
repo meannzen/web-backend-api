@@ -6,7 +6,7 @@ use argon2::{
 };
 use axum::{
     Json,
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::StatusCode,
 };
 use domain::models::user::{Email, NewUser, UserId};
@@ -14,8 +14,45 @@ use domain::ports::user_repository::UserRepository;
 use uuid::Uuid;
 
 use crate::AppResult;
+use crate::dtos::common::{ErrorResponse, PaginatedResponse, PaginationMeta, PaginationParams};
 use crate::dtos::user::{CreateUserRequest, UserResponse};
 use crate::extractors::ValidatedJson;
+
+#[utoipa::path(
+    get,
+    path = "/api/v1/users",
+    tag = "Users",
+    params(
+        ("page" = Option<u32>, Query, description = "Page number (default: 1)"),
+        ("per_page" = Option<u32>, Query, description = "Items per page (default: 20, max: 100)"),
+    ),
+    responses(
+        (status = 200, description = "List of users", body = inline(PaginatedResponse<UserResponse>)),
+    )
+)]
+#[tracing::instrument(skip(user_repo, params), fields(page = params.page, per_page = params.per_page))]
+#[axum::debug_handler]
+pub async fn list_users(
+    State(user_repo): State<Arc<dyn UserRepository>>,
+    Query(params): Query<PaginationParams>,
+) -> AppResult<Json<PaginatedResponse<UserResponse>>> {
+    let per_page = params.per_page.clamp(1, 100);
+    let offset = params.page.saturating_sub(1) * per_page;
+
+    let (users, total) = user_repo.list(offset, per_page).await?;
+
+    tracing::info!(total = total, "listed users");
+
+    Ok(Json(PaginatedResponse {
+        data: users.into_iter().map(UserResponse::from).collect(),
+        meta: PaginationMeta {
+            page: params.page,
+            per_page,
+            total,
+            total_pages: total.div_ceil(per_page as u64) as u32,
+        },
+    }))
+}
 
 #[utoipa::path(
     post,
@@ -24,10 +61,11 @@ use crate::extractors::ValidatedJson;
     request_body = CreateUserRequest,
     responses(
         (status = 201, description = "User created", body = UserResponse),
-        (status = 409, description = "Email already taken"),
-        (status = 400, description = "Invalid input"),
+        (status = 400, description = "Invalid input", body = ErrorResponse),
+        (status = 409, description = "Email already taken", body = ErrorResponse),
     )
 )]
+#[tracing::instrument(skip(user_repo, req))]
 #[axum::debug_handler]
 pub async fn create_user(
     State(user_repo): State<Arc<dyn UserRepository>>,
@@ -42,6 +80,8 @@ pub async fn create_user(
 
     let user = user_repo.create(new_user).await?;
 
+    tracing::info!(user_id = %user.id().as_uuid(), "user created");
+
     Ok((StatusCode::CREATED, Json(UserResponse::from(user))))
 }
 
@@ -52,9 +92,10 @@ pub async fn create_user(
     params(("id" = Uuid, Path, description = "User ID")),
     responses(
         (status = 200, description = "User found", body = UserResponse),
-        (status = 404, description = "User not found"),
+        (status = 404, description = "User not found", body = ErrorResponse),
     )
 )]
+#[tracing::instrument(skip(user_repo))]
 #[axum::debug_handler]
 pub async fn get_user(
     State(user_repo): State<Arc<dyn UserRepository>>,
