@@ -7,3 +7,4 @@ edition = "2024"
 sqlx.workspace = true
 anyhow.workspace = true
 secrecy.workspace = true
+shared = { path = "../shared" }

@@ -3,9 +3,9 @@ mod common;
 use axum::http::StatusCode;
 use sqlx::PgPool;
 
-#[sqlx::test]
-async fn health_live_returns_ok(_pool: PgPool) {
-    let app = common::TestApp::new(_pool);
+#[tokio::test]
+async fn health_live_returns_ok() {
+    let app = common::TestApp::new_without_db();
     let response = app.get("/health").await;
     assert_eq!(response.status(), StatusCode::OK);
 }

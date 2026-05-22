@@ -42,5 +42,5 @@ pub fn router(state: AppState) -> Router {
 }
 
 fn api_router() -> Router<AppState> {
-    Router::new().route("/test", get(async || "<html><div>test</div></html>"))
+    Router::new()
 }

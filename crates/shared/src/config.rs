@@ -1,34 +1,64 @@
 use anyhow::Context;
-use secrecy::SecretString;
+use secrecy::{ExposeSecret, SecretString};
 use serde::Deserialize;
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct Config {
-    pub server: ServerConfig,
-    pub database: DatabaseConfig,
+    pub application: ApplicationSettings,
+    pub database: DatabaseSettings,
 }
 
 #[derive(Debug, Clone, Deserialize)]
-pub struct ServerConfig {
+pub struct ApplicationSettings {
+    #[serde(default = "default_host")]
+    pub host: String,
     #[serde(default = "default_port")]
     pub port: u16,
-
     #[serde(default = "default_environment")]
     pub environment: Environment,
-
     #[serde(default = "default_log_level")]
     pub log_level: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
-pub struct DatabaseConfig {
-    pub url: SecretString,
+pub struct DatabaseSettings {
+    pub username: String,
+    pub password: SecretString,
+    pub host: String,
+    #[serde(default = "default_db_port")]
+    pub port: u16,
+    pub database_name: String,
+    #[serde(default)]
+    pub require_ssl: bool,
     #[serde(default = "default_max_connections")]
     pub max_connections: u32,
 }
 
+impl DatabaseSettings {
+    pub fn connection_string(&self) -> SecretString {
+        let ssl = if self.require_ssl { "?sslmode=require" } else { "" };
+        SecretString::from(format!(
+            "postgres://{}:{}@{}:{}/{}{}",
+            self.username,
+            self.password.expose_secret(),
+            self.host,
+            self.port,
+            self.database_name,
+            ssl,
+        ))
+    }
+}
+
+fn default_host() -> String {
+    "127.0.0.1".to_string()
+}
+
 fn default_port() -> u16 {
     3000
+}
+
+fn default_db_port() -> u16 {
+    5432
 }
 
 fn default_max_connections() -> u32 {
