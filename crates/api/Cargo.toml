@@ -18,7 +18,6 @@ utoipa-swagger-ui.workspace = true
 shared = { path = "../shared" }
 infra = { path = "../infra" }
 domain = { path = "../domain" }
-argon2.workspace = true
 tower-http.workspace = true
 validator.workspace = true
 uuid.workspace = true
@@ -30,3 +29,4 @@ sqlx.workspace = true
 secrecy.workspace = true
 http-body-util.workspace = true
 serde_json.workspace = true
+async-trait.workspace = true

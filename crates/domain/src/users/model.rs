@@ -63,30 +63,14 @@ impl User {
         created_at: DateTime<Utc>,
         updated_at: DateTime<Utc>,
     ) -> Self {
-        Self {
-            id,
-            email,
-            password_hash,
-            created_at,
-            updated_at,
-        }
+        Self { id, email, password_hash, created_at, updated_at }
     }
 
-    pub fn id(&self) -> &UserId {
-        &self.id
-    }
-    pub fn email(&self) -> &Email {
-        &self.email
-    }
-    pub fn password_hash(&self) -> &str {
-        &self.password_hash
-    }
-    pub fn created_at(&self) -> DateTime<Utc> {
-        self.created_at
-    }
-    pub fn updated_at(&self) -> DateTime<Utc> {
-        self.updated_at
-    }
+    pub fn id(&self) -> &UserId { &self.id }
+    pub fn email(&self) -> &Email { &self.email }
+    pub fn password_hash(&self) -> &str { &self.password_hash }
+    pub fn created_at(&self) -> DateTime<Utc> { self.created_at }
+    pub fn updated_at(&self) -> DateTime<Utc> { self.updated_at }
 }
 
 pub struct NewUser {

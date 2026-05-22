@@ -1,6 +1,8 @@
+use std::sync::Arc;
+
 use axum::extract::State;
 use axum::http::StatusCode;
-use infra::db::Database;
+use domain::ports::health_indicator::HealthIndicator;
 
 #[utoipa::path(
     get,
@@ -25,7 +27,7 @@ pub async fn health_live() -> StatusCode {
     )
 )]
 #[axum::debug_handler]
-pub async fn health_ready(State(db): State<Database>) -> StatusCode {
+pub async fn health_ready(State(db): State<Arc<dyn HealthIndicator>>) -> StatusCode {
     if db.ping().await {
         StatusCode::OK
     } else {

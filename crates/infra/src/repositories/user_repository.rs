@@ -1,8 +1,8 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use domain::error::UserError;
-use domain::models::user::{Email, NewUser, User, UserId};
-use domain::ports::user_repository::UserRepository;
+use domain::users::errors::UserError;
+use domain::users::model::{Email, NewUser, User, UserId};
+use domain::users::port::UserRepository;
 use sqlx::PgPool;
 use uuid::Uuid;
 

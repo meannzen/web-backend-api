@@ -43,7 +43,7 @@ name = "api"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "argon2",
+ "async-trait",
  "axum",
  "chrono",
  "domain",
@@ -1079,12 +1079,14 @@ name = "infra"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "argon2",
  "async-trait",
  "chrono",
  "domain",
  "secrecy",
  "shared",
  "sqlx",
+ "tokio",
  "uuid",
 ]
 

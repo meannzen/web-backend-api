@@ -1,14 +1,13 @@
 use axum::http::StatusCode;
 use serde_json::json;
-use sqlx::PgPool;
 
-use crate::common::{TestApp, body_json};
+use crate::common::{MockError, TestApp, body_json};
 
 // --- create user ---
 
-#[sqlx::test(migrations = "../../migrations")]
-async fn create_user_returns_201(pool: PgPool) {
-    let app = TestApp::new(pool);
+#[tokio::test]
+async fn create_user_returns_201() {
+    let app = TestApp::new();
 
     let response = app
         .post(
@@ -26,9 +25,9 @@ async fn create_user_returns_201(pool: PgPool) {
     assert!(body["updated_at"].is_string());
 }
 
-#[sqlx::test(migrations = "../../migrations")]
-async fn create_user_returns_409_on_duplicate_email(pool: PgPool) {
-    let app = TestApp::new(pool);
+#[tokio::test]
+async fn create_user_returns_409_on_duplicate_email() {
+    let app = TestApp::new();
     let payload = json!({ "email": "dup@example.com", "password": "secret123" });
 
     app.post("/api/v1/users", &payload).await;
@@ -40,7 +39,7 @@ async fn create_user_returns_409_on_duplicate_email(pool: PgPool) {
 // validation tests do not touch the DB — validator fires before any repository call
 #[tokio::test]
 async fn create_user_returns_400_on_invalid_email() {
-    let app = TestApp::new_without_db();
+    let app = TestApp::new();
 
     let response = app
         .post(
@@ -57,7 +56,7 @@ async fn create_user_returns_400_on_invalid_email() {
 
 #[tokio::test]
 async fn create_user_returns_400_on_short_password() {
-    let app = TestApp::new_without_db();
+    let app = TestApp::new();
 
     let response = app
         .post(
@@ -72,11 +71,29 @@ async fn create_user_returns_400_on_short_password() {
     assert!(body["error"]["fields"]["password"].is_array());
 }
 
+#[tokio::test]
+async fn create_user_returns_500_on_internal_error() {
+    let app = TestApp::new();
+    app.user_repo.set_error(MockError::Internal);
+
+    let response = app
+        .post(
+            "/api/v1/users",
+            &json!({ "email": "user@example.com", "password": "secret123" }),
+        )
+        .await;
+
+    assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    let body = body_json(response).await;
+    assert_eq!(body["error"]["type"], "internal_error");
+    assert_eq!(body["error"]["message"], "an internal error occurred");
+}
+
 // --- list users ---
 
-#[sqlx::test(migrations = "../../migrations")]
-async fn list_users_returns_empty_list(pool: PgPool) {
-    let app = TestApp::new(pool);
+#[tokio::test]
+async fn list_users_returns_empty_list() {
+    let app = TestApp::new();
     let response = app.get("/api/v1/users").await;
 
     assert_eq!(response.status(), StatusCode::OK);
@@ -87,9 +104,9 @@ async fn list_users_returns_empty_list(pool: PgPool) {
     assert_eq!(body["meta"]["total"], 0);
 }
 
-#[sqlx::test(migrations = "../../migrations")]
-async fn list_users_returns_created_users(pool: PgPool) {
-    let app = TestApp::new(pool);
+#[tokio::test]
+async fn list_users_returns_created_users() {
+    let app = TestApp::new();
 
     app.post("/api/v1/users", &json!({ "email": "a@example.com", "password": "secret123" }))
         .await;
@@ -104,9 +121,9 @@ async fn list_users_returns_created_users(pool: PgPool) {
     assert_eq!(body["data"].as_array().unwrap().len(), 2);
 }
 
-#[sqlx::test(migrations = "../../migrations")]
-async fn list_users_respects_pagination(pool: PgPool) {
-    let app = TestApp::new(pool);
+#[tokio::test]
+async fn list_users_respects_pagination() {
+    let app = TestApp::new();
 
     for i in 0..5 {
         app.post(
@@ -125,11 +142,23 @@ async fn list_users_respects_pagination(pool: PgPool) {
     assert_eq!(body["meta"]["total_pages"], 3);
 }
 
+#[tokio::test]
+async fn list_users_returns_500_on_internal_error() {
+    let app = TestApp::new();
+    app.user_repo.set_error(MockError::Internal);
+
+    let response = app.get("/api/v1/users").await;
+
+    assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    let body = body_json(response).await;
+    assert_eq!(body["error"]["type"], "internal_error");
+}
+
 // --- get user ---
 
-#[sqlx::test(migrations = "../../migrations")]
-async fn get_user_returns_200(pool: PgPool) {
-    let app = TestApp::new(pool);
+#[tokio::test]
+async fn get_user_returns_200() {
+    let app = TestApp::new();
 
     let created = body_json(
         app.post(
@@ -150,13 +179,27 @@ async fn get_user_returns_200(pool: PgPool) {
     assert_eq!(body["email"], "get@example.com");
 }
 
-#[sqlx::test(migrations = "../../migrations")]
-async fn get_user_returns_404_for_unknown_id(pool: PgPool) {
-    let app = TestApp::new(pool);
+#[tokio::test]
+async fn get_user_returns_404_for_unknown_id() {
+    let app = TestApp::new();
 
     let response = app
         .get("/api/v1/users/00000000-0000-0000-0000-000000000000")
         .await;
 
     assert_eq!(response.status(), StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn get_user_returns_500_on_internal_error() {
+    let app = TestApp::new();
+    app.user_repo.set_error(MockError::Internal);
+
+    let response = app
+        .get("/api/v1/users/00000000-0000-0000-0000-000000000000")
+        .await;
+
+    assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    let body = body_json(response).await;
+    assert_eq!(body["error"]["type"], "internal_error");
 }

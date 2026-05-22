@@ -1,16 +1,12 @@
 use std::sync::Arc;
 
-use argon2::{
-    Argon2,
-    password_hash::{PasswordHasher, SaltString, rand_core::OsRng},
-};
 use axum::{
     Json,
     extract::{Path, Query, State},
     http::StatusCode,
 };
-use domain::models::user::{Email, NewUser, UserId};
-use domain::ports::user_repository::UserRepository;
+use domain::users::model::UserId;
+use domain::users::service::UserService;
 use uuid::Uuid;
 
 use crate::AppResult;
@@ -30,16 +26,16 @@ use crate::extractors::ValidatedJson;
         (status = 200, description = "List of users", body = inline(PaginatedResponse<UserResponse>)),
     )
 )]
-#[tracing::instrument(skip(user_repo, params), fields(page = params.page, per_page = params.per_page))]
-#[axum::debug_handler]
+#[tracing::instrument(skip(user_service, params), fields(page = params.page, per_page = params.per_page))]
+#[axum::debug_handler(state = crate::state::AppState)]
 pub async fn list_users(
-    State(user_repo): State<Arc<dyn UserRepository>>,
+    State(user_service): State<Arc<UserService>>,
     Query(params): Query<PaginationParams>,
 ) -> AppResult<Json<PaginatedResponse<UserResponse>>> {
     let per_page = params.per_page.clamp(1, 100);
     let offset = params.page.saturating_sub(1) * per_page;
 
-    let (users, total) = user_repo.list(offset, per_page).await?;
+    let (users, total) = user_service.list(offset, per_page).await?;
 
     tracing::info!(total = total, "listed users");
 
@@ -65,20 +61,13 @@ pub async fn list_users(
         (status = 409, description = "Email already taken", body = ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(user_repo, req))]
-#[axum::debug_handler]
+#[tracing::instrument(skip(user_service, req))]
+#[axum::debug_handler(state = crate::state::AppState)]
 pub async fn create_user(
-    State(user_repo): State<Arc<dyn UserRepository>>,
+    State(user_service): State<Arc<UserService>>,
     ValidatedJson(req): ValidatedJson<CreateUserRequest>,
 ) -> AppResult<(StatusCode, Json<UserResponse>)> {
-    let email = Email::parse(&req.email).map_err(crate::error::AppError::Validation)?;
-    let password_hash = hash_password(req.password).await?;
-    let new_user = NewUser {
-        email,
-        password_hash,
-    };
-
-    let user = user_repo.create(new_user).await?;
+    let user = user_service.create(&req.email, req.password).await?;
 
     tracing::info!(user_id = %user.id().as_uuid(), "user created");
 
@@ -95,28 +84,12 @@ pub async fn create_user(
         (status = 404, description = "User not found", body = ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(user_repo))]
-#[axum::debug_handler]
+#[tracing::instrument(skip(user_service))]
+#[axum::debug_handler(state = crate::state::AppState)]
 pub async fn get_user(
-    State(user_repo): State<Arc<dyn UserRepository>>,
+    State(user_service): State<Arc<UserService>>,
     Path(id): Path<Uuid>,
 ) -> AppResult<Json<UserResponse>> {
-    let user = user_repo.find_by_id(&UserId::from(id)).await?;
+    let user = user_service.get_by_id(UserId::from(id)).await?;
     Ok(Json(UserResponse::from(user)))
-}
-
-async fn hash_password(password: String) -> AppResult<String> {
-    tokio::task::spawn_blocking(move || {
-        let salt = SaltString::generate(&mut OsRng);
-        Argon2::default()
-            .hash_password(password.as_bytes(), &salt)
-            .map(|h| h.to_string())
-            .map_err(|e| {
-                crate::error::AppError::Internal(anyhow::anyhow!("failed to hash password: {}", e))
-            })
-    })
-    .await
-    .map_err(|e| {
-        crate::error::AppError::Internal(anyhow::anyhow!("spawn_blocking failed: {}", e))
-    })?
 }

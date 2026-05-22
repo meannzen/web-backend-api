@@ -20,8 +20,8 @@ pub struct UserResponse {
     pub updated_at: DateTime<Utc>,
 }
 
-impl From<domain::models::user::User> for UserResponse {
-    fn from(u: domain::models::user::User) -> Self {
+impl From<domain::users::model::User> for UserResponse {
+    fn from(u: domain::users::model::User) -> Self {
         UserResponse {
             id: *u.id().as_uuid(),
             email: u.email().as_ref().to_string(),

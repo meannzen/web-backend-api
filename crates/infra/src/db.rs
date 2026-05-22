@@ -1,12 +1,17 @@
 use std::time::Duration;
 
 use anyhow::Context;
+use async_trait::async_trait;
+use domain::ports::health_indicator::HealthIndicator;
 use secrecy::ExposeSecret;
 use shared::config::DatabaseSettings;
 use sqlx::{PgPool, postgres::PgPoolOptions};
 
 #[derive(Clone)]
-pub struct Database(PgPool);
+pub struct Database {
+    pool: Option<PgPool>,
+    mock_ping: Option<bool>,
+}
 
 impl Database {
     pub async fn connect(settings: &DatabaseSettings) -> anyhow::Result<Database> {
@@ -19,29 +24,62 @@ impl Database {
             .await
             .context("failed to connect to the database")?;
 
-        Ok(Database(pool))
+        Ok(Database {
+            pool: Some(pool),
+            mock_ping: None,
+        })
     }
 
     pub fn from_pool(pool: PgPool) -> Self {
-        Database(pool)
+        Database {
+            pool: Some(pool),
+            mock_ping: None,
+        }
+    }
+
+    pub fn mock(ping_success: bool) -> Self {
+        Database {
+            pool: None,
+            mock_ping: Some(ping_success),
+        }
     }
 
     pub fn pool(&self) -> &PgPool {
-        &self.0
+        self.pool.as_ref().expect("database pool is not available in mock mode")
     }
 
     pub async fn migrate(&self) -> anyhow::Result<()> {
-        sqlx::migrate!("../../migrations")
-            .run(&self.0)
-            .await
-            .context("failed to run migrations")
+        if let Some(ref pool) = self.pool {
+            sqlx::migrate!("../../migrations")
+                .run(pool)
+                .await
+                .context("failed to run migrations")
+        } else {
+            Ok(())
+        }
     }
 
     pub async fn close(&self) {
-        self.0.close().await;
+        if let Some(ref pool) = self.pool {
+            pool.close().await;
+        }
     }
 
     pub async fn ping(&self) -> bool {
-        sqlx::query("SELECT 1").execute(&self.0).await.is_ok()
+        if let Some(status) = self.mock_ping {
+            return status;
+        }
+        if let Some(ref pool) = self.pool {
+            sqlx::query("SELECT 1").execute(pool).await.is_ok()
+        } else {
+            false
+        }
+    }
+}
+
+#[async_trait]
+impl HealthIndicator for Database {
+    async fn ping(&self) -> bool {
+        self.ping().await
     }
 }

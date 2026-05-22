@@ -26,15 +26,15 @@ pub enum AppError {
     Internal(#[from] anyhow::Error),
 }
 
-impl From<domain::error::UserError> for AppError {
-    fn from(e: domain::error::UserError) -> Self {
+impl From<domain::users::errors::UserError> for AppError {
+    fn from(e: domain::users::errors::UserError) -> Self {
         match e {
-            domain::error::UserError::EmailTaken => {
+            domain::users::errors::UserError::EmailTaken => {
                 AppError::Conflict("email already taken".to_string())
             }
-            domain::error::UserError::NotFound => AppError::NotFound,
-            domain::error::UserError::InvalidEmail(msg) => AppError::Validation(msg),
-            domain::error::UserError::Internal(e) => AppError::Internal(e),
+            domain::users::errors::UserError::NotFound => AppError::NotFound,
+            domain::users::errors::UserError::InvalidEmail(msg) => AppError::Validation(msg),
+            domain::users::errors::UserError::Internal(e) => AppError::Internal(e),
         }
     }
 }
