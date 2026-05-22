@@ -17,8 +17,15 @@ utoipa-swagger-ui.workspace = true
 # crate workspace
 shared = { path = "../shared" }
 infra = { path = "../infra" }
+domain = { path = "../domain" }
+argon2.workspace = true
+validator.workspace = true
+uuid.workspace = true
+chrono.workspace = true
 
 [dev-dependencies]
 tower.workspace = true
 sqlx.workspace = true
 secrecy.workspace = true
+http-body-util.workspace = true
+serde_json.workspace = true

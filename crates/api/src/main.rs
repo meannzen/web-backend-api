@@ -1,7 +1,10 @@
+use std::sync::Arc;
+
 use api::handlers::router;
 use api::shutdown::shutdown_signal;
 use api::state::AppState;
 use infra::db::Database;
+use infra::repositories::user_repository::PgUserRepository;
 use shared::config::Config;
 use shared::observability;
 use tokio::net::TcpListener;
@@ -15,10 +18,10 @@ async fn main() -> anyhow::Result<()> {
     let db = Database::connect(&config.database).await?;
     db.migrate().await?;
 
-    let state = AppState::new(config, db.clone());
-    let token = CancellationToken::new();
+    let user_repo = Arc::new(PgUserRepository::new(db.pool().clone()));
+    let state = AppState::new(config, db.clone(), user_repo);
 
-    // spawn signal watcher — cancels the token on SIGINT or SIGTERM
+    let token = CancellationToken::new();
     let signal_token = token.clone();
     tokio::spawn(async move {
         shutdown_signal().await;
@@ -33,12 +36,10 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!("listening on {}", listener.local_addr()?);
 
-    // HTTP server drains in-flight requests before returning
     axum::serve(listener, router(state))
         .with_graceful_shutdown(token.cancelled_owned())
         .await?;
 
-    // ordered teardown: server stopped, now close DB
     tracing::info!("closing database pool");
     db.close().await;
 

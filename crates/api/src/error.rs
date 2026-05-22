@@ -26,6 +26,19 @@ pub enum AppError {
     Internal(#[from] anyhow::Error),
 }
 
+impl From<domain::error::UserError> for AppError {
+    fn from(e: domain::error::UserError) -> Self {
+        match e {
+            domain::error::UserError::EmailTaken => {
+                AppError::Conflict("email already taken".to_string())
+            }
+            domain::error::UserError::NotFound => AppError::NotFound,
+            domain::error::UserError::InvalidEmail(msg) => AppError::Validation(msg),
+            domain::error::UserError::Internal(e) => AppError::Internal(e),
+        }
+    }
+}
+
 impl IntoResponse for AppError {
     fn into_response(self) -> axum::response::Response {
         let (status, error_type, message) = match &self {

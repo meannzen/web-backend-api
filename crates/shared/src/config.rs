@@ -36,7 +36,11 @@ pub struct DatabaseSettings {
 
 impl DatabaseSettings {
     pub fn connection_string(&self) -> SecretString {
-        let ssl = if self.require_ssl { "?sslmode=require" } else { "" };
+        let ssl = if self.require_ssl {
+            "?sslmode=require"
+        } else {
+            ""
+        };
         SecretString::from(format!(
             "postgres://{}:{}@{}:{}/{}{}",
             self.username,
