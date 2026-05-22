@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use api::handlers::router;
+use api::routes::router;
 use api::shutdown::shutdown_signal;
 use api::state::AppState;
 use infra::db::Database;

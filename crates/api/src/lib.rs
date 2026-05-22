@@ -1,8 +1,10 @@
 use crate::error::AppError;
 
+pub mod dtos;
 pub mod error;
 pub mod extractors;
 pub mod handlers;
+pub mod routes;
 pub mod shutdown;
 pub mod state;
 

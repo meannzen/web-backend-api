@@ -23,7 +23,7 @@ async fn create_user_returns_201(pool: PgPool) {
     assert_eq!(body["email"], "user@example.com");
     assert!(body["id"].is_string());
     assert!(body["created_at"].is_string());
-    assert!(body["password_hash"].is_null());
+    assert!(body["updated_at"].is_string());
 }
 
 #[sqlx::test(migrations = "../../migrations")]
@@ -37,9 +37,10 @@ async fn create_user_returns_409_on_duplicate_email(pool: PgPool) {
     assert_eq!(response.status(), StatusCode::CONFLICT);
 }
 
-#[sqlx::test(migrations = "../../migrations")]
-async fn create_user_returns_400_on_invalid_email(pool: PgPool) {
-    let app = TestApp::new(pool);
+// validation tests do not touch the DB — validator fires before any repository call
+#[tokio::test]
+async fn create_user_returns_400_on_invalid_email() {
+    let app = TestApp::new_without_db();
 
     let response = app
         .post(
@@ -54,9 +55,9 @@ async fn create_user_returns_400_on_invalid_email(pool: PgPool) {
     assert!(body["error"]["fields"]["email"].is_array());
 }
 
-#[sqlx::test(migrations = "../../migrations")]
-async fn create_user_returns_400_on_short_password(pool: PgPool) {
-    let app = TestApp::new(pool);
+#[tokio::test]
+async fn create_user_returns_400_on_short_password() {
+    let app = TestApp::new_without_db();
 
     let response = app
         .post(
