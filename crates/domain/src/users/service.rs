@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::ports::password_hasher::PasswordHasher;
 use crate::users::errors::UserError;
-use crate::users::model::{Email, NewUser, User, UserId};
+use crate::users::model::{Email, NewUser, User, UserId, UserCursor, UserListQuery};
 use crate::users::port::UserRepository;
 
 pub struct UserService {
@@ -25,7 +25,12 @@ impl UserService {
         self.repo.find_by_id(&id).await
     }
 
-    pub async fn list(&self, offset: u32, limit: u32) -> Result<(Vec<User>, u64), UserError> {
-        self.repo.list(offset, limit).await
+    pub async fn list(
+        &self,
+        query: &UserListQuery,
+        after: Option<UserCursor>,
+        limit: u32,
+    ) -> Result<(Vec<User>, bool), UserError> {
+        self.repo.list(query, after, limit).await
     }
 }

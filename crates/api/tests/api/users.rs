@@ -36,7 +36,6 @@ async fn create_user_returns_409_on_duplicate_email() {
     assert_eq!(response.status(), StatusCode::CONFLICT);
 }
 
-// validation tests do not touch the DB — validator fires before any repository call
 #[tokio::test]
 async fn create_user_returns_400_on_invalid_email() {
     let app = TestApp::new();
@@ -100,8 +99,8 @@ async fn list_users_returns_empty_list() {
 
     let body = body_json(response).await;
     assert_eq!(body["data"], serde_json::json!([]));
-    assert_eq!(body["meta"]["page"], 1);
-    assert_eq!(body["meta"]["total"], 0);
+    assert_eq!(body["meta"]["has_next_page"], false);
+    assert_eq!(body["meta"]["next_cursor"], serde_json::Value::Null);
 }
 
 #[tokio::test]
@@ -117,12 +116,12 @@ async fn list_users_returns_created_users() {
     assert_eq!(response.status(), StatusCode::OK);
 
     let body = body_json(response).await;
-    assert_eq!(body["meta"]["total"], 2);
     assert_eq!(body["data"].as_array().unwrap().len(), 2);
+    assert_eq!(body["meta"]["has_next_page"], false);
 }
 
 #[tokio::test]
-async fn list_users_respects_pagination() {
+async fn list_users_cursor_pagination_traverses_all_pages() {
     let app = TestApp::new();
 
     for i in 0..5 {
@@ -133,13 +132,40 @@ async fn list_users_respects_pagination() {
         .await;
     }
 
-    let response = app.get("/api/v1/users?page=1&per_page=2").await;
+    // First page
+    let response = app.get("/api/v1/users?limit=2").await;
     assert_eq!(response.status(), StatusCode::OK);
 
     let body = body_json(response).await;
     assert_eq!(body["data"].as_array().unwrap().len(), 2);
-    assert_eq!(body["meta"]["total"], 5);
-    assert_eq!(body["meta"]["total_pages"], 3);
+    assert_eq!(body["meta"]["has_next_page"], true);
+    let cursor = body["meta"]["next_cursor"].as_str().unwrap().to_string();
+
+    // Second page
+    let response = app.get(&format!("/api/v1/users?limit=2&after={}", cursor)).await;
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body = body_json(response).await;
+    assert_eq!(body["data"].as_array().unwrap().len(), 2);
+    assert_eq!(body["meta"]["has_next_page"], true);
+    let cursor = body["meta"]["next_cursor"].as_str().unwrap().to_string();
+
+    // Third page: 1 remaining
+    let response = app.get(&format!("/api/v1/users?limit=2&after={}", cursor)).await;
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body = body_json(response).await;
+    assert_eq!(body["data"].as_array().unwrap().len(), 1);
+    assert_eq!(body["meta"]["has_next_page"], false);
+    assert_eq!(body["meta"]["next_cursor"], serde_json::Value::Null);
+}
+
+#[tokio::test]
+async fn list_users_returns_400_on_invalid_cursor() {
+    let app = TestApp::new();
+
+    let response = app.get("/api/v1/users?after=not-a-valid-cursor!!!").await;
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
 }
 
 #[tokio::test]
@@ -152,6 +178,116 @@ async fn list_users_returns_500_on_internal_error() {
     assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
     let body = body_json(response).await;
     assert_eq!(body["error"]["type"], "internal_error");
+}
+
+// --- search ---
+
+#[tokio::test]
+async fn list_users_search_filters_by_email() {
+    let app = TestApp::new();
+
+    app.post("/api/v1/users", &json!({ "email": "alice@example.com", "password": "secret123" }))
+        .await;
+    app.post("/api/v1/users", &json!({ "email": "bob@example.com", "password": "secret123" }))
+        .await;
+    app.post("/api/v1/users", &json!({ "email": "charlie@other.org", "password": "secret123" }))
+        .await;
+
+    let response = app.get("/api/v1/users?search=example").await;
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body = body_json(response).await;
+    assert_eq!(body["data"].as_array().unwrap().len(), 2);
+    assert_eq!(body["meta"]["has_next_page"], false);
+}
+
+#[tokio::test]
+async fn list_users_search_returns_empty_for_no_match() {
+    let app = TestApp::new();
+
+    app.post("/api/v1/users", &json!({ "email": "user@example.com", "password": "secret123" }))
+        .await;
+
+    let response = app.get("/api/v1/users?search=nobody").await;
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body = body_json(response).await;
+    assert_eq!(body["data"], serde_json::json!([]));
+}
+
+// --- sort ---
+
+#[tokio::test]
+async fn list_users_sort_by_email_asc() {
+    let app = TestApp::new();
+
+    app.post("/api/v1/users", &json!({ "email": "charlie@example.com", "password": "secret123" }))
+        .await;
+    app.post("/api/v1/users", &json!({ "email": "alice@example.com", "password": "secret123" }))
+        .await;
+    app.post("/api/v1/users", &json!({ "email": "bob@example.com", "password": "secret123" }))
+        .await;
+
+    let response = app.get("/api/v1/users?sort_by=email&sort_direction=asc").await;
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body = body_json(response).await;
+    let emails: Vec<&str> = body["data"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|u| u["email"].as_str().unwrap())
+        .collect();
+
+    assert_eq!(emails, vec!["alice@example.com", "bob@example.com", "charlie@example.com"]);
+}
+
+#[tokio::test]
+async fn list_users_sort_by_email_cursor_traverses_pages() {
+    let app = TestApp::new();
+
+    for email in ["alice@x.com", "bob@x.com", "charlie@x.com", "diana@x.com", "eve@x.com"] {
+        app.post("/api/v1/users", &json!({ "email": email, "password": "secret123" })).await;
+    }
+
+    let response = app.get("/api/v1/users?sort_by=email&sort_direction=asc&limit=2").await;
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body = body_json(response).await;
+    assert_eq!(body["data"].as_array().unwrap().len(), 2);
+    assert_eq!(body["meta"]["has_next_page"], true);
+    let cursor = body["meta"]["next_cursor"].as_str().unwrap().to_string();
+
+    let response = app
+        .get(&format!("/api/v1/users?sort_by=email&sort_direction=asc&limit=2&after={}", cursor))
+        .await;
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body = body_json(response).await;
+    assert_eq!(body["data"].as_array().unwrap().len(), 2);
+}
+
+#[tokio::test]
+async fn list_users_cursor_sort_mismatch_returns_400() {
+    let app = TestApp::new();
+
+    app.post("/api/v1/users", &json!({ "email": "a@example.com", "password": "secret123" }))
+        .await;
+    app.post("/api/v1/users", &json!({ "email": "b@example.com", "password": "secret123" }))
+        .await;
+    app.post("/api/v1/users", &json!({ "email": "c@example.com", "password": "secret123" }))
+        .await;
+
+    // Get a cursor from an email-sorted page
+    let response = app.get("/api/v1/users?sort_by=email&sort_direction=asc&limit=1").await;
+    let body = body_json(response).await;
+    let cursor = body["meta"]["next_cursor"].as_str().unwrap().to_string();
+
+    // Try to use that cursor with a different sort — should be rejected
+    let response = app
+        .get(&format!("/api/v1/users?sort_by=created_at&after={}", cursor))
+        .await;
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
 }
 
 // --- get user ---

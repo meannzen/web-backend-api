@@ -26,7 +26,9 @@ use crate::state::AppState;
     components(schemas(
         crate::dtos::user::CreateUserRequest,
         crate::dtos::user::UserResponse,
-        crate::dtos::common::PaginationMeta,
+        crate::dtos::common::CursorPaginationMeta,
+        crate::dtos::common::ApiSortField,
+        crate::dtos::common::ApiSortDirection,
         crate::dtos::common::ErrorResponse,
         crate::dtos::common::ErrorDetail,
     )),

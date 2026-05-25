@@ -7,7 +7,9 @@ use axum::body::Body;
 use axum::http::{Request, Response, header};
 use chrono::Utc;
 use domain::users::errors::UserError;
-use domain::users::model::{Email, NewUser, User, UserId};
+use domain::users::model::{
+    CursorValue, Email, NewUser, SortField, User, UserId, UserCursor, UserListQuery,
+};
 use domain::users::port::UserRepository;
 use domain::users::service::UserService;
 use infra::db::Database;
@@ -109,7 +111,12 @@ impl UserRepository for InMemoryUserRepository {
             .ok_or(UserError::NotFound)
     }
 
-    async fn list(&self, offset: u32, limit: u32) -> Result<(Vec<User>, u64), UserError> {
+    async fn list(
+        &self,
+        query: &UserListQuery,
+        after: Option<UserCursor>,
+        limit: u32,
+    ) -> Result<(Vec<User>, bool), UserError> {
         if let Some(err) = *self.should_fail.lock().unwrap() {
             return Err(match err {
                 MockError::EmailTaken => UserError::EmailTaken,
@@ -119,18 +126,80 @@ impl UserRepository for InMemoryUserRepository {
         }
 
         let users = self.users.lock().unwrap();
-        let total = users.len() as u64;
+        let sorted = users.clone();
 
-        let mut sorted = users.clone();
-        sorted.sort_by(|a, b| b.created_at().cmp(&a.created_at()));
+        // Apply search filter
+        let filtered: Vec<User> = if let Some(ref search) = query.search {
+            let lower = search.to_lowercase();
+            sorted.into_iter().filter(|u| u.email().as_ref().contains(&lower)).collect()
+        } else {
+            sorted
+        };
 
-        let sliced = sorted
-            .into_iter()
-            .skip(offset as usize)
-            .take(limit as usize)
-            .collect::<Vec<_>>();
+        // Sort according to query
+        let mut sorted = filtered;
+        match query.sort_by {
+            SortField::CreatedAt => {
+                sorted.sort_by(|a, b| {
+                    let ord = a.created_at().cmp(&b.created_at())
+                        .then_with(|| a.id().as_uuid().cmp(b.id().as_uuid()));
+                    match query.direction {
+                        domain::users::model::SortDirection::Asc => ord,
+                        domain::users::model::SortDirection::Desc => ord.reverse(),
+                    }
+                });
+            }
+            SortField::Email => {
+                sorted.sort_by(|a, b| {
+                    let ord = a.email().as_ref().cmp(b.email().as_ref())
+                        .then_with(|| a.id().as_uuid().cmp(b.id().as_uuid()));
+                    match query.direction {
+                        domain::users::model::SortDirection::Asc => ord,
+                        domain::users::model::SortDirection::Desc => ord.reverse(),
+                    }
+                });
+            }
+        }
 
-        Ok((sliced, total))
+        // Apply cursor filter
+        let page: Vec<User> = if let Some(cursor) = after {
+            let is_after: Box<dyn Fn(&User) -> bool> = match (&cursor.value, cursor.sort_by) {
+                (CursorValue::Timestamp(ts), SortField::CreatedAt) => {
+                    let ts = *ts;
+                    let uuid = *cursor.id.as_uuid();
+                    match query.direction {
+                        domain::users::model::SortDirection::Desc => Box::new(move |u: &User| {
+                            (u.created_at(), u.id().as_uuid()) < (ts, &uuid)
+                        }),
+                        domain::users::model::SortDirection::Asc => Box::new(move |u: &User| {
+                            (u.created_at(), u.id().as_uuid()) > (ts, &uuid)
+                        }),
+                    }
+                }
+                (CursorValue::Text(s), SortField::Email) => {
+                    let s = s.clone();
+                    let uuid = *cursor.id.as_uuid();
+                    match query.direction {
+                        domain::users::model::SortDirection::Desc => Box::new(move |u: &User| {
+                            (u.email().as_ref(), u.id().as_uuid()) < (s.as_str(), &uuid)
+                        }),
+                        domain::users::model::SortDirection::Asc => Box::new(move |u: &User| {
+                            (u.email().as_ref(), u.id().as_uuid()) > (s.as_str(), &uuid)
+                        }),
+                    }
+                }
+                _ => Box::new(|_: &User| false),
+            };
+            sorted.into_iter().filter(|u| is_after(u)).take(limit as usize + 1).collect()
+        } else {
+            sorted.into_iter().take(limit as usize + 1).collect()
+        };
+
+        let has_next_page = page.len() > limit as usize;
+        let mut page = page;
+        page.truncate(limit as usize);
+
+        Ok((page, has_next_page))
     }
 }
 

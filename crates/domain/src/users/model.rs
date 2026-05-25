@@ -77,3 +77,60 @@ pub struct NewUser {
     pub email: Email,
     pub password_hash: String,
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SortField {
+    CreatedAt,
+    Email,
+}
+
+impl SortField {
+    pub fn column(&self) -> &'static str {
+        match self {
+            SortField::CreatedAt => "created_at",
+            SortField::Email => "email",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SortDirection {
+    Asc,
+    Desc,
+}
+
+impl SortDirection {
+    pub fn sql_order(&self) -> &'static str {
+        match self {
+            SortDirection::Asc => "ASC",
+            SortDirection::Desc => "DESC",
+        }
+    }
+
+    /// SQL comparison operator to advance past the cursor in this direction.
+    pub fn cursor_op(&self) -> &'static str {
+        match self {
+            SortDirection::Asc => ">",
+            SortDirection::Desc => "<",
+        }
+    }
+}
+
+pub struct UserListQuery {
+    pub search: Option<String>,
+    pub sort_by: SortField,
+    pub direction: SortDirection,
+}
+
+#[derive(Debug, Clone)]
+pub enum CursorValue {
+    Timestamp(DateTime<Utc>),
+    Text(String),
+}
+
+pub struct UserCursor {
+    pub sort_by: SortField,
+    pub direction: SortDirection,
+    pub value: CursorValue,
+    pub id: UserId,
+}

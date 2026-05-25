@@ -1,11 +1,14 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use domain::users::errors::UserError;
-use domain::users::model::{Email, NewUser, User, UserId};
+use domain::users::model::{
+    CursorValue, Email, NewUser, User, UserId, UserCursor, UserListQuery,
+};
 use domain::users::port::UserRepository;
 use sqlx::PgPool;
 use uuid::Uuid;
 
+#[derive(sqlx::FromRow)]
 struct UserRow {
     id: Uuid,
     email: String,
@@ -100,27 +103,72 @@ impl UserRepository for PgUserRepository {
         User::try_from(row).map_err(UserError::Internal)
     }
 
-    async fn list(&self, offset: u32, limit: u32) -> Result<(Vec<User>, u64), UserError> {
-        let rows = sqlx::query_as!(
-            UserRow,
-            r#"
-            SELECT id, email, password_hash, created_at, updated_at
-            FROM users
-            ORDER BY created_at DESC
-            LIMIT $1 OFFSET $2
-            "#,
-            limit as i64,
-            offset as i64,
-        )
-        .fetch_all(&self.pool)
-        .await
-        .map_err(|e| UserError::Internal(anyhow::anyhow!(e).context("failed to list users")))?;
+    async fn list(
+        &self,
+        query: &UserListQuery,
+        after: Option<UserCursor>,
+        limit: u32,
+    ) -> Result<(Vec<User>, bool), UserError> {
+        let fetch_limit = (limit + 1) as i64;
+        let col = query.sort_by.column();
+        let order = query.direction.sql_order();
+        let op = query.direction.cursor_op();
 
-        let total = sqlx::query_scalar!("SELECT COUNT(*) FROM users")
-            .fetch_one(&self.pool)
+        let mut conditions: Vec<String> = Vec::new();
+        let mut param_idx: u32 = 1;
+
+        if query.search.is_some() {
+            conditions.push(format!("email ILIKE ${}", param_idx));
+            param_idx += 1;
+        }
+
+        if after.is_some() {
+            conditions.push(format!("({col}, id) {op} (${}, ${})", param_idx, param_idx + 1));
+            param_idx += 2;
+        }
+
+        let where_clause = if conditions.is_empty() {
+            String::new()
+        } else {
+            format!("WHERE {}", conditions.join(" AND "))
+        };
+
+        let sql = format!(
+            "SELECT id, email, password_hash, created_at, updated_at \
+             FROM users \
+             {where_clause} \
+             ORDER BY {col} {order}, id {order} \
+             LIMIT ${}",
+            param_idx
+        );
+
+        let mut q = sqlx::query_as::<_, UserRow>(&sql);
+
+        if let Some(ref search) = query.search {
+            q = q.bind(format!("%{}%", search));
+        }
+
+        if let Some(cursor) = after {
+            match cursor.value {
+                CursorValue::Timestamp(ts) => {
+                    q = q.bind(ts).bind(*cursor.id.as_uuid());
+                }
+                CursorValue::Text(s) => {
+                    q = q.bind(s).bind(*cursor.id.as_uuid());
+                }
+            }
+        }
+
+        q = q.bind(fetch_limit);
+
+        let rows = q
+            .fetch_all(&self.pool)
             .await
-            .map_err(|e| UserError::Internal(anyhow::anyhow!(e).context("failed to count users")))?
-            .unwrap_or(0) as u64;
+            .map_err(|e| UserError::Internal(anyhow::anyhow!(e).context("failed to list users")))?;
+
+        let has_next_page = rows.len() > limit as usize;
+        let mut rows = rows;
+        rows.truncate(limit as usize);
 
         let users = rows
             .into_iter()
@@ -128,6 +176,6 @@ impl UserRepository for PgUserRepository {
             .collect::<Result<Vec<_>, _>>()
             .map_err(UserError::Internal)?;
 
-        Ok((users, total))
+        Ok((users, has_next_page))
     }
 }

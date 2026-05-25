@@ -28,7 +28,7 @@ impl AppState {
 
     pub fn new_test(
         config: Config,
-        db: impl HealthIndicator + Send + Sync + 'static,
+        db: impl HealthIndicator + 'static,
         user_service: Arc<UserService>,
     ) -> Self {
         AppState {
