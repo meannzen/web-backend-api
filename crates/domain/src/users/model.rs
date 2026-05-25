@@ -91,6 +91,18 @@ impl SortField {
             SortField::Email => "email",
         }
     }
+
+    pub fn parse_cursor_value(&self, s: &str) -> Result<CursorValue, String> {
+        match self {
+            SortField::CreatedAt => {
+                let ts = DateTime::parse_from_rfc3339(s)
+                    .map_err(|_| "invalid cursor".to_string())?
+                    .to_utc();
+                Ok(CursorValue::Timestamp(ts))
+            }
+            SortField::Email => Ok(CursorValue::Text(s.to_string())),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -104,6 +116,13 @@ impl SortDirection {
         match self {
             SortDirection::Asc => "ASC",
             SortDirection::Desc => "DESC",
+        }
+    }
+
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            SortDirection::Asc => "asc",
+            SortDirection::Desc => "desc",
         }
     }
 

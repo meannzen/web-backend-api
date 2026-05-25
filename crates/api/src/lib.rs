@@ -1,5 +1,6 @@
 use crate::error::AppError;
 
+pub mod cursor;
 pub mod dtos;
 pub mod error;
 pub mod extractors;
