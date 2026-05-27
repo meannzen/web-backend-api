@@ -142,7 +142,7 @@ impl UserRepository for PgUserRepository {
             param_idx
         );
 
-        let mut q = sqlx::query_as::<_, UserRow>(&sql);
+        let mut q = sqlx::query_as::<_, UserRow>(sqlx::AssertSqlSafe(sql));
 
         if let Some(ref search) = query.search {
             q = q.bind(format!("%{}%", search));

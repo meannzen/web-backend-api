@@ -10,6 +10,7 @@ secrecy.workspace = true
 shared = { path = "../shared" }
 domain = { path = "../domain" }
 argon2.workspace = true
+rand.workspace = true
 uuid.workspace = true
 chrono.workspace = true
 async-trait.workspace = true

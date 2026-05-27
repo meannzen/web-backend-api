@@ -1,8 +1,9 @@
 use async_trait::async_trait;
 use argon2::{
     Argon2,
-    password_hash::{PasswordHash, PasswordHasher as _, PasswordVerifier as _, SaltString, rand_core::OsRng},
+    password_hash::{PasswordHash, PasswordHasher as _, PasswordVerifier as _, SaltString},
 };
+use rand::rngs::OsRng;
 use domain::ports::password_hasher::PasswordHasher;
 
 pub struct Argon2PasswordHasher;
