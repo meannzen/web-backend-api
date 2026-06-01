@@ -1,9 +1,11 @@
+use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 
 use api::routes::router;
 use api::state::AppState;
 use async_trait::async_trait;
 use axum::body::Body;
+use axum::extract::ConnectInfo;
 use axum::http::{Request, Response, header};
 use chrono::Utc;
 use domain::users::errors::UserError;
@@ -17,6 +19,28 @@ use infra::security::password_hasher::Argon2PasswordHasher;
 use secrecy::SecretString;
 use shared::config::{ApplicationSettings, Config, DatabaseSettings, Environment};
 use tower::ServiceExt;
+
+const TEST_JWT_SECRET: &str = "test-secret-key-for-testing-minimum-32-chars!!";
+
+fn make_test_token() -> String {
+    use jsonwebtoken::{EncodingKey, Header, encode};
+
+    #[derive(serde::Serialize)]
+    struct TestClaims {
+        sub: String,
+        exp: usize,
+    }
+
+    encode(
+        &Header::default(),
+        &TestClaims {
+            sub: "00000000-0000-0000-0000-000000000001".to_string(),
+            exp: 9_999_999_999,
+        },
+        &EncodingKey::from_secret(TEST_JWT_SECRET.as_bytes()),
+    )
+    .unwrap()
+}
 
 #[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -223,6 +247,8 @@ impl TestApp {
                 port: 0,
                 environment: Environment::Development,
                 log_level: "error".to_string(),
+                jwt_secret: Some(SecretString::from(TEST_JWT_SECRET)),
+                cors_origins: vec![],
             },
             database: DatabaseSettings {
                 username: "unused".to_string(),
@@ -246,12 +272,26 @@ impl TestApp {
     }
 
     pub async fn request(&self, req: Request<Body>) -> Response<Body> {
-        self.router.clone().oneshot(req).await.unwrap()
+        let (mut parts, body) = req.into_parts();
+        parts
+            .extensions
+            .insert(ConnectInfo(SocketAddr::from(([127, 0, 0, 1], 0))));
+        self.router
+            .clone()
+            .oneshot(Request::from_parts(parts, body))
+            .await
+            .unwrap()
     }
 
     pub async fn get(&self, uri: &str) -> Response<Body> {
-        self.request(Request::builder().uri(uri).body(Body::empty()).unwrap())
-            .await
+        self.request(
+            Request::builder()
+                .uri(uri)
+                .header(header::AUTHORIZATION, format!("Bearer {}", make_test_token()))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
     }
 
     pub async fn post<B: serde::Serialize>(&self, uri: &str, body: &B) -> Response<Body> {
@@ -260,6 +300,7 @@ impl TestApp {
                 .method("POST")
                 .uri(uri)
                 .header(header::CONTENT_TYPE, "application/json")
+                .header(header::AUTHORIZATION, format!("Bearer {}", make_test_token()))
                 .body(Body::from(serde_json::to_vec(body).unwrap()))
                 .unwrap(),
         )
