@@ -45,7 +45,9 @@ impl Database {
     }
 
     pub fn pool(&self) -> &PgPool {
-        self.pool.as_ref().expect("database pool is not available in mock mode")
+        self.pool
+            .as_ref()
+            .expect("database pool is not available in mock mode")
     }
 
     pub async fn migrate(&self) -> anyhow::Result<()> {

@@ -16,6 +16,9 @@ pub enum AppError {
     #[error("authentication required")]
     Unauthorized,
 
+    #[error("invalid credentials")]
+    InvalidCredentials,
+
     #[error("insufficient permissions")]
     Forbidden,
 
@@ -33,6 +36,7 @@ impl From<domain::users::errors::UserError> for AppError {
                 AppError::Conflict("email already taken".to_string())
             }
             domain::users::errors::UserError::NotFound => AppError::NotFound,
+            domain::users::errors::UserError::InvalidCredentials => AppError::InvalidCredentials,
             domain::users::errors::UserError::InvalidEmail(msg) => AppError::Validation(msg),
             domain::users::errors::UserError::Internal(e) => AppError::Internal(e),
         }
@@ -55,6 +59,7 @@ impl IntoResponse for AppError {
                 return (StatusCode::BAD_REQUEST, Json(body)).into_response();
             }
             AppError::Unauthorized => (StatusCode::UNAUTHORIZED, "unauthorized", self.to_string()),
+            AppError::InvalidCredentials => (StatusCode::UNAUTHORIZED, "unauthorized", self.to_string()),
             AppError::Forbidden => (StatusCode::FORBIDDEN, "forbidden", self.to_string()),
             AppError::Conflict(msg) => (StatusCode::CONFLICT, "conflict", msg.clone()),
             AppError::Internal(err) => {

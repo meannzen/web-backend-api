@@ -3,7 +3,7 @@ use std::time::Duration;
 
 use axum::extract::DefaultBodyLimit;
 use axum::http::StatusCode;
-use axum::{Router, middleware, routing::get};
+use axum::{Router, middleware, routing::{get, post}};
 use tower::ServiceBuilder;
 use tower_governor::{GovernorLayer, governor::GovernorConfigBuilder};
 use tower_http::{
@@ -15,6 +15,7 @@ use tower_http::{
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
+use crate::handlers::auth::{login, register};
 use crate::handlers::health::{health_live, health_ready};
 use crate::handlers::users::{create_user, get_user, list_users};
 use crate::middleware::{auth::auth_middleware, cors::cors_layer, timing::timing_middleware};
@@ -32,11 +33,16 @@ use crate::state::AppState;
     paths(
         crate::handlers::health::health_live,
         crate::handlers::health::health_ready,
+        crate::handlers::auth::register,
+        crate::handlers::auth::login,
         crate::handlers::users::list_users,
         crate::handlers::users::create_user,
         crate::handlers::users::get_user,
     ),
     components(schemas(
+        crate::dtos::auth::RegisterRequest,
+        crate::dtos::auth::LoginRequest,
+        crate::dtos::auth::TokenResponse,
         crate::dtos::user::CreateUserRequest,
         crate::dtos::user::UserResponse,
         crate::dtos::common::CursorPaginationMeta,
@@ -47,13 +53,34 @@ use crate::state::AppState;
     )),
     tags(
         (name = "Health", description = "Liveness and readiness probes"),
+        (name = "Auth", description = "Registration and login"),
         (name = "Users", description = "User management"),
     ),
     servers(
         (url = "/", description = "Current server"),
     ),
+    modifiers(&SecurityAddon),
 )]
 struct ApiDoc;
+
+struct SecurityAddon;
+
+impl utoipa::Modify for SecurityAddon {
+    fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
+        if let Some(components) = openapi.components.as_mut() {
+            use utoipa::openapi::security::{HttpAuthScheme, HttpBuilder, SecurityScheme};
+            components.add_security_scheme(
+                "bearer_auth",
+                SecurityScheme::Http(
+                    HttpBuilder::new()
+                        .scheme(HttpAuthScheme::Bearer)
+                        .bearer_format("JWT")
+                        .build(),
+                ),
+            );
+        }
+    }
+}
 
 pub fn router(state: AppState) -> Router {
     let config = Arc::clone(&state.config);
@@ -119,6 +146,8 @@ fn public_routes() -> Router<AppState> {
     Router::new()
         .route("/health", get(health_live))
         .route("/health/ready", get(health_ready))
+        .route("/api/v1/auth/register", post(register))
+        .route("/api/v1/auth/login", post(login))
 }
 
 fn protected_routes(state: AppState) -> Router<AppState> {

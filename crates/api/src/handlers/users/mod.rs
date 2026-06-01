@@ -14,7 +14,7 @@ use crate::dtos::common::{
     CursorPaginationParams, ErrorResponse,
 };
 use crate::dtos::user::{CreateUserRequest, UserResponse};
-use crate::extractors::ValidatedJson;
+use crate::extractors::{RequireAdmin, ValidatedJson};
 
 mod cursor;
 
@@ -22,6 +22,7 @@ mod cursor;
     get,
     path = "/api/v1/users",
     tag = "Users",
+    security(("bearer_auth" = [])),
     params(
         ("limit" = Option<u32>, Query, description = "Items per page (default: 20, max: 100)"),
         ("after" = Option<String>, Query, description = "Opaque cursor from previous page's next_cursor"),
@@ -31,11 +32,14 @@ mod cursor;
     ),
     responses(
         (status = 200, description = "List of users", body = inline(CursorPaginatedResponse<UserResponse>)),
+        (status = 401, description = "Missing or invalid token", body = ErrorResponse),
+        (status = 403, description = "Admin role required", body = ErrorResponse),
     )
 )]
 #[tracing::instrument(skip(user_service, params), fields(limit = params.limit))]
 #[axum::debug_handler(state = crate::state::AppState)]
 pub async fn list_users(
+    _: RequireAdmin,
     State(user_service): State<Arc<UserService>>,
     Query(params): Query<CursorPaginationParams>,
 ) -> AppResult<Json<CursorPaginatedResponse<UserResponse>>> {
@@ -79,20 +83,26 @@ pub async fn list_users(
     post,
     path = "/api/v1/users",
     tag = "Users",
+    security(("bearer_auth" = [])),
     request_body = CreateUserRequest,
     responses(
         (status = 201, description = "User created", body = UserResponse),
         (status = 400, description = "Invalid input", body = ErrorResponse),
+        (status = 401, description = "Missing or invalid token", body = ErrorResponse),
+        (status = 403, description = "Admin role required", body = ErrorResponse),
         (status = 409, description = "Email already taken", body = ErrorResponse),
     )
 )]
 #[tracing::instrument(skip(user_service, req))]
 #[axum::debug_handler(state = crate::state::AppState)]
 pub async fn create_user(
+    _: RequireAdmin,
     State(user_service): State<Arc<UserService>>,
     ValidatedJson(req): ValidatedJson<CreateUserRequest>,
 ) -> AppResult<(StatusCode, Json<UserResponse>)> {
-    let user = user_service.create(&req.email, req.password).await?;
+    let user = user_service
+        .create(&req.email, req.password, req.first_name, req.last_name, domain::users::model::Role::User)
+        .await?;
 
     tracing::info!(user_id = %user.id().as_uuid(), "user created");
 
@@ -103,15 +113,19 @@ pub async fn create_user(
     get,
     path = "/api/v1/users/{id}",
     tag = "Users",
+    security(("bearer_auth" = [])),
     params(("id" = Uuid, Path, description = "User ID")),
     responses(
         (status = 200, description = "User found", body = UserResponse),
+        (status = 401, description = "Missing or invalid token", body = ErrorResponse),
+        (status = 403, description = "Admin role required", body = ErrorResponse),
         (status = 404, description = "User not found", body = ErrorResponse),
     )
 )]
 #[tracing::instrument(skip(user_service))]
 #[axum::debug_handler(state = crate::state::AppState)]
 pub async fn get_user(
+    _: RequireAdmin,
     State(user_service): State<Arc<UserService>>,
     Path(id): Path<Uuid>,
 ) -> AppResult<Json<UserResponse>> {

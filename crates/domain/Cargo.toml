@@ -9,3 +9,4 @@ thiserror.workspace = true
 uuid.workspace = true
 chrono.workspace = true
 async-trait.workspace = true
+serde.workspace = true

@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 
 use crate::users::errors::UserError;
-use crate::users::model::{Email, NewUser, User, UserId, UserCursor, UserListQuery};
+use crate::users::model::{Email, NewUser, User, UserCursor, UserId, UserListQuery};
 
 #[async_trait]
 pub trait UserRepository: Send + Sync + 'static {

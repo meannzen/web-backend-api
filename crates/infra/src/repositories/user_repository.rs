@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use domain::users::errors::UserError;
 use domain::users::model::{
-    CursorValue, Email, NewUser, User, UserId, UserCursor, UserListQuery,
+    CursorValue, Email, NewUser, Role, User, UserId, UserCursor, UserListQuery,
 };
 use domain::users::port::UserRepository;
 use sqlx::PgPool;
@@ -13,6 +13,9 @@ struct UserRow {
     id: Uuid,
     email: String,
     password_hash: String,
+    first_name: String,
+    last_name: String,
+    role: String,
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
 }
@@ -22,10 +25,10 @@ impl TryFrom<UserRow> for User {
 
     fn try_from(row: UserRow) -> Result<Self, Self::Error> {
         let email = Email::parse(&row.email).map_err(|e| anyhow::anyhow!(e))?;
+        let role = row.role.parse::<Role>().map_err(|e| anyhow::anyhow!(e))?;
         Ok(User::new(
             UserId::from(row.id),
-            email,
-            row.password_hash,
+            NewUser { email, password_hash: row.password_hash, first_name: row.first_name, last_name: row.last_name, role },
             row.created_at,
             row.updated_at,
         ))
@@ -48,12 +51,15 @@ impl UserRepository for PgUserRepository {
         let row = sqlx::query_as!(
             UserRow,
             r#"
-            INSERT INTO users (email, password_hash)
-            VALUES ($1, $2)
-            RETURNING id, email, password_hash, created_at, updated_at
+            INSERT INTO users (email, password_hash, first_name, last_name, role)
+            VALUES ($1, $2, $3, $4, $5)
+            RETURNING id, email, password_hash, first_name, last_name, role, created_at, updated_at
             "#,
             new_user.email.as_ref(),
             new_user.password_hash,
+            new_user.first_name,
+            new_user.last_name,
+            new_user.role.as_str(),
         )
         .fetch_one(&self.pool)
         .await
@@ -71,7 +77,7 @@ impl UserRepository for PgUserRepository {
         let row = sqlx::query_as!(
             UserRow,
             r#"
-            SELECT id, email, password_hash, created_at, updated_at
+            SELECT id, email, password_hash, first_name, last_name, role, created_at, updated_at
             FROM users WHERE id = $1
             "#,
             id.as_uuid(),
@@ -88,7 +94,7 @@ impl UserRepository for PgUserRepository {
         let row = sqlx::query_as!(
             UserRow,
             r#"
-            SELECT id, email, password_hash, created_at, updated_at
+            SELECT id, email, password_hash, first_name, last_name, role, created_at, updated_at
             FROM users WHERE email = $1
             "#,
             email.as_ref(),
@@ -134,7 +140,7 @@ impl UserRepository for PgUserRepository {
         };
 
         let sql = format!(
-            "SELECT id, email, password_hash, created_at, updated_at \
+            "SELECT id, email, password_hash, first_name, last_name, role, created_at, updated_at \
              FROM users \
              {where_clause} \
              ORDER BY {col} {order}, id {order} \
@@ -145,7 +151,8 @@ impl UserRepository for PgUserRepository {
         let mut q = sqlx::query_as::<_, UserRow>(sqlx::AssertSqlSafe(sql));
 
         if let Some(ref search) = query.search {
-            q = q.bind(format!("%{}%", search));
+            let escaped = search.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_");
+            q = q.bind(format!("%{}%", escaped));
         }
 
         if let Some(cursor) = after {

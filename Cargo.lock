@@ -648,6 +648,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "chrono",
+ "serde",
  "thiserror 2.0.18",
  "uuid",
 ]
