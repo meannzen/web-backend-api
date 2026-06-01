@@ -1,6 +1,6 @@
 use anyhow::Context;
 use secrecy::{ExposeSecret, SecretString};
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer, de};
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct Config {
@@ -18,6 +18,10 @@ pub struct ApplicationSettings {
     pub environment: Environment,
     #[serde(default = "default_log_level")]
     pub log_level: String,
+    #[serde(default)]
+    pub jwt_secret: Option<SecretString>,
+    #[serde(default, deserialize_with = "deserialize_comma_separated")]
+    pub cors_origins: Vec<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -83,6 +87,38 @@ pub enum Environment {
     Development,
     Staging,
     Production,
+}
+
+fn deserialize_comma_separated<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    struct Visitor;
+
+    impl<'de> de::Visitor<'de> for Visitor {
+        type Value = Vec<String>;
+
+        fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+            write!(f, "a comma-separated string or a sequence of strings")
+        }
+
+        fn visit_str<E: de::Error>(self, v: &str) -> Result<Vec<String>, E> {
+            Ok(v.split(',')
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect())
+        }
+
+        fn visit_seq<A: de::SeqAccess<'de>>(self, mut seq: A) -> Result<Vec<String>, A::Error> {
+            let mut out = Vec::new();
+            while let Some(s) = seq.next_element::<String>()? {
+                out.push(s);
+            }
+            Ok(out)
+        }
+    }
+
+    deserializer.deserialize_any(Visitor)
 }
 
 impl Config {

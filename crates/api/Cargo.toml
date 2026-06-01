@@ -18,7 +18,11 @@ utoipa-swagger-ui.workspace = true
 shared = { path = "../shared" }
 infra = { path = "../infra" }
 domain = { path = "../domain" }
+tower.workspace = true
 tower-http.workspace = true
+tower_governor.workspace = true
+jsonwebtoken.workspace = true
+secrecy.workspace = true
 validator.workspace = true
 uuid.workspace = true
 chrono.workspace = true
