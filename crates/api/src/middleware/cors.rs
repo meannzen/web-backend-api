@@ -15,12 +15,7 @@ pub fn cors_layer(config: &Config) -> CorsLayer {
 
             CorsLayer::new()
                 .allow_origin(origins)
-                .allow_methods([
-                    Method::GET,
-                    Method::POST,
-                    Method::PUT,
-                    Method::DELETE,
-                ])
+                .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE])
                 .allow_headers([header::CONTENT_TYPE, header::AUTHORIZATION])
                 .allow_credentials(true)
         }

@@ -6,6 +6,8 @@ pub enum UserError {
     EmailTaken,
     #[error("user not found")]
     NotFound,
+    #[error("invalid credentials")]
+    InvalidCredentials,
     #[error("invalid email: {0}")]
     InvalidEmail(String),
     #[error(transparent)]

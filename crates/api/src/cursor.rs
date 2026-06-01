@@ -26,7 +26,8 @@ pub fn decode(s: &str, expected_sort: &str, expected_dir: &str) -> Result<RawCur
     if parts.len() != 4 {
         return Err(invalid_cursor());
     }
-    let (cursor_sort, cursor_dir, cursor_value, cursor_id) = (parts[0], parts[1], parts[2], parts[3]);
+    let (cursor_sort, cursor_dir, cursor_value, cursor_id) =
+        (parts[0], parts[1], parts[2], parts[3]);
 
     if cursor_sort != expected_sort || cursor_dir != expected_dir {
         return Err(AppError::Validation(
@@ -34,5 +35,8 @@ pub fn decode(s: &str, expected_sort: &str, expected_dir: &str) -> Result<RawCur
         ));
     }
 
-    Ok(RawCursor { value: cursor_value.to_string(), id: cursor_id.to_string() })
+    Ok(RawCursor {
+        value: cursor_value.to_string(),
+        id: cursor_id.to_string(),
+    })
 }

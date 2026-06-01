@@ -13,22 +13,36 @@ use shared::config::{ApplicationSettings, Config, DatabaseSettings, Environment}
 use sqlx::PgPool;
 use tower::ServiceExt;
 
-const TEST_JWT_SECRET: &str = "test-secret-key-for-testing-minimum-32-chars!!";
+pub const TEST_JWT_SECRET: &str = "test-secret-key-for-testing-minimum-32-chars!!";
 
-fn make_test_token() -> String {
-    use jsonwebtoken::{EncodingKey, Header, encode};
+fn make_admin_token() -> String {
+    make_token("admin")
+}
+
+fn make_token(role: &str) -> String {
+    use jsonwebtoken::{Algorithm, EncodingKey, Header, encode};
 
     #[derive(serde::Serialize)]
     struct TestClaims {
         sub: String,
+        email: String,
+        role: String,
+        iss: String,
+        aud: String,
         exp: usize,
+        iat: usize,
     }
 
     encode(
-        &Header::default(),
+        &Header::new(Algorithm::HS256),
         &TestClaims {
             sub: "00000000-0000-0000-0000-000000000001".to_string(),
+            email: "test@example.com".to_string(),
+            role: role.to_string(),
+            iss: "tpa".to_string(),
+            aud: "tpa-api".to_string(),
             exp: 9_999_999_999,
+            iat: 0,
         },
         &EncodingKey::from_secret(TEST_JWT_SECRET.as_bytes()),
     )
@@ -65,40 +79,59 @@ impl TestApp {
         TestApp { router: router(state) }
     }
 
-    pub async fn get(&self, uri: &str) -> Response<Body> {
-        let (mut parts, body) = Request::builder()
-            .uri(uri)
-            .header(header::AUTHORIZATION, format!("Bearer {}", make_test_token()))
-            .body(Body::empty())
-            .unwrap()
-            .into_parts();
-        parts
-            .extensions
-            .insert(ConnectInfo(SocketAddr::from(([127, 0, 0, 1], 0))));
-        self.router
-            .clone()
-            .oneshot(Request::from_parts(parts, body))
-            .await
-            .unwrap()
+    async fn inject_and_send(&self, req: Request<Body>) -> Response<Body> {
+        let (mut parts, body) = req.into_parts();
+        parts.extensions.insert(ConnectInfo(SocketAddr::from(([127, 0, 0, 1], 0))));
+        self.router.clone().oneshot(Request::from_parts(parts, body)).await.unwrap()
     }
 
-    pub async fn post<B: serde::Serialize>(&self, uri: &str, body: &B) -> Response<Body> {
-        let (mut parts, body) = Request::builder()
-            .method("POST")
-            .uri(uri)
-            .header(header::CONTENT_TYPE, "application/json")
-            .header(header::AUTHORIZATION, format!("Bearer {}", make_test_token()))
-            .body(Body::from(serde_json::to_vec(body).unwrap()))
-            .unwrap()
-            .into_parts();
-        parts
-            .extensions
-            .insert(ConnectInfo(SocketAddr::from(([127, 0, 0, 1], 0))));
-        self.router
-            .clone()
-            .oneshot(Request::from_parts(parts, body))
-            .await
-            .unwrap()
+    pub async fn get_as_admin(&self, uri: &str) -> Response<Body> {
+        self.inject_and_send(
+            Request::builder()
+                .uri(uri)
+                .header(header::AUTHORIZATION, format!("Bearer {}", make_admin_token()))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+    }
+
+    pub async fn post_as_admin<B: serde::Serialize>(&self, uri: &str, body: &B) -> Response<Body> {
+        self.inject_and_send(
+            Request::builder()
+                .method("POST")
+                .uri(uri)
+                .header(header::CONTENT_TYPE, "application/json")
+                .header(header::AUTHORIZATION, format!("Bearer {}", make_admin_token()))
+                .body(Body::from(serde_json::to_vec(body).unwrap()))
+                .unwrap(),
+        )
+        .await
+    }
+
+    /// POST without Authorization header — for public endpoints.
+    pub async fn post_public<B: serde::Serialize>(&self, uri: &str, body: &B) -> Response<Body> {
+        self.inject_and_send(
+            Request::builder()
+                .method("POST")
+                .uri(uri)
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(serde_json::to_vec(body).unwrap()))
+                .unwrap(),
+        )
+        .await
+    }
+
+    /// GET without Authorization header.
+    #[allow(dead_code)]
+    pub async fn get_no_auth(&self, uri: &str) -> Response<Body> {
+        self.inject_and_send(
+            Request::builder()
+                .uri(uri)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
     }
 }
 
