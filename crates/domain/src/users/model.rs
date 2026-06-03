@@ -1,5 +1,34 @@
 use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Role {
+    User,
+    Admin,
+}
+
+impl Role {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Role::User => "user",
+            Role::Admin => "admin",
+        }
+    }
+}
+
+impl std::str::FromStr for Role {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "user" => Ok(Role::User),
+            "admin" => Ok(Role::Admin),
+            other => Err(format!("invalid role: {other}")),
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct UserId(Uuid);
@@ -46,36 +75,48 @@ impl AsRef<str> for Email {
     }
 }
 
+pub struct NewUser {
+    pub email: Email,
+    pub password_hash: String,
+    pub first_name: String,
+    pub last_name: String,
+    pub role: Role,
+}
+
 #[derive(Debug, Clone)]
 pub struct User {
     id: UserId,
     email: Email,
     password_hash: String,
+    first_name: String,
+    last_name: String,
+    role: Role,
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
 }
 
 impl User {
-    pub fn new(
-        id: UserId,
-        email: Email,
-        password_hash: String,
-        created_at: DateTime<Utc>,
-        updated_at: DateTime<Utc>,
-    ) -> Self {
-        Self { id, email, password_hash, created_at, updated_at }
+    pub fn new(id: UserId, data: NewUser, created_at: DateTime<Utc>, updated_at: DateTime<Utc>) -> Self {
+        Self {
+            id,
+            email: data.email,
+            password_hash: data.password_hash,
+            first_name: data.first_name,
+            last_name: data.last_name,
+            role: data.role,
+            created_at,
+            updated_at,
+        }
     }
 
     pub fn id(&self) -> &UserId { &self.id }
     pub fn email(&self) -> &Email { &self.email }
     pub fn password_hash(&self) -> &str { &self.password_hash }
+    pub fn first_name(&self) -> &str { &self.first_name }
+    pub fn last_name(&self) -> &str { &self.last_name }
+    pub fn role(&self) -> &Role { &self.role }
     pub fn created_at(&self) -> DateTime<Utc> { self.created_at }
     pub fn updated_at(&self) -> DateTime<Utc> { self.updated_at }
-}
-
-pub struct NewUser {
-    pub email: Email,
-    pub password_hash: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -126,7 +167,6 @@ impl SortDirection {
         }
     }
 
-    /// SQL comparison operator to advance past the cursor in this direction.
     pub fn cursor_op(&self) -> &'static str {
         match self {
             SortDirection::Asc => ">",

@@ -43,10 +43,13 @@ async fn main() -> anyhow::Result<()> {
                 listener.local_addr().expect("address error")
             );
 
-            axum::serve(listener, router(state))
-                .with_graceful_shutdown(http_token.cancelled_owned())
-                .await
-                .expect("server error");
+            axum::serve(
+                listener,
+                router(state).into_make_service_with_connect_info::<std::net::SocketAddr>(),
+            )
+            .with_graceful_shutdown(http_token.cancelled_owned())
+            .await
+            .expect("server error");
         }
     });
     // example backegrond task

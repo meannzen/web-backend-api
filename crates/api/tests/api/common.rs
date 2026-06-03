@@ -1,9 +1,11 @@
+use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 
 use api::routes::router;
 use api::state::AppState;
 use async_trait::async_trait;
 use axum::body::Body;
+use axum::extract::ConnectInfo;
 use axum::http::{Request, Response, header};
 use chrono::Utc;
 use domain::users::errors::UserError;
@@ -17,6 +19,46 @@ use infra::security::password_hasher::Argon2PasswordHasher;
 use secrecy::SecretString;
 use shared::config::{ApplicationSettings, Config, DatabaseSettings, Environment};
 use tower::ServiceExt;
+
+pub const TEST_JWT_SECRET: &str = "test-secret-key-for-testing-minimum-32-chars!!";
+
+pub fn make_admin_token() -> String {
+    make_token("admin")
+}
+
+pub fn make_test_token() -> String {
+    make_token("user")
+}
+
+fn make_token(role: &str) -> String {
+    use jsonwebtoken::{Algorithm, EncodingKey, Header, encode};
+
+    #[derive(serde::Serialize)]
+    struct TestClaims {
+        sub: String,
+        email: String,
+        role: String,
+        iss: String,
+        aud: String,
+        exp: usize,
+        iat: usize,
+    }
+
+    encode(
+        &Header::new(Algorithm::HS256),
+        &TestClaims {
+            sub: "00000000-0000-0000-0000-000000000001".to_string(),
+            email: "test@example.com".to_string(),
+            role: role.to_string(),
+            iss: "tpa".to_string(),
+            aud: "tpa-api".to_string(),
+            exp: 9_999_999_999,
+            iat: 0,
+        },
+        &EncodingKey::from_secret(TEST_JWT_SECRET.as_bytes()),
+    )
+    .unwrap()
+}
 
 #[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -66,13 +108,7 @@ impl UserRepository for InMemoryUserRepository {
         }
 
         let now = Utc::now();
-        let user = User::new(
-            UserId::new(),
-            new_user.email,
-            new_user.password_hash,
-            now,
-            now,
-        );
+        let user = User::new(UserId::new(), new_user, now, now);
         users.push(user.clone());
         Ok(user)
     }
@@ -223,6 +259,8 @@ impl TestApp {
                 port: 0,
                 environment: Environment::Development,
                 log_level: "error".to_string(),
+                jwt_secret: Some(SecretString::from(TEST_JWT_SECRET)),
+                cors_origins: vec![],
             },
             database: DatabaseSettings {
                 username: "unused".to_string(),
@@ -246,12 +284,26 @@ impl TestApp {
     }
 
     pub async fn request(&self, req: Request<Body>) -> Response<Body> {
-        self.router.clone().oneshot(req).await.unwrap()
+        let (mut parts, body) = req.into_parts();
+        parts
+            .extensions
+            .insert(ConnectInfo(SocketAddr::from(([127, 0, 0, 1], 0))));
+        self.router
+            .clone()
+            .oneshot(Request::from_parts(parts, body))
+            .await
+            .unwrap()
     }
 
     pub async fn get(&self, uri: &str) -> Response<Body> {
-        self.request(Request::builder().uri(uri).body(Body::empty()).unwrap())
-            .await
+        self.request(
+            Request::builder()
+                .uri(uri)
+                .header(header::AUTHORIZATION, format!("Bearer {}", make_test_token()))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
     }
 
     pub async fn post<B: serde::Serialize>(&self, uri: &str, body: &B) -> Response<Body> {
@@ -260,7 +312,68 @@ impl TestApp {
                 .method("POST")
                 .uri(uri)
                 .header(header::CONTENT_TYPE, "application/json")
+                .header(header::AUTHORIZATION, format!("Bearer {}", make_test_token()))
                 .body(Body::from(serde_json::to_vec(body).unwrap()))
+                .unwrap(),
+        )
+        .await
+    }
+
+    pub async fn get_as_admin(&self, uri: &str) -> Response<Body> {
+        self.request(
+            Request::builder()
+                .uri(uri)
+                .header(header::AUTHORIZATION, format!("Bearer {}", make_admin_token()))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+    }
+
+    pub async fn post_as_admin<B: serde::Serialize>(&self, uri: &str, body: &B) -> Response<Body> {
+        self.request(
+            Request::builder()
+                .method("POST")
+                .uri(uri)
+                .header(header::CONTENT_TYPE, "application/json")
+                .header(header::AUTHORIZATION, format!("Bearer {}", make_admin_token()))
+                .body(Body::from(serde_json::to_vec(body).unwrap()))
+                .unwrap(),
+        )
+        .await
+    }
+
+    /// POST without an Authorization header — for public endpoints (register, login).
+    pub async fn post_public<B: serde::Serialize>(&self, uri: &str, body: &B) -> Response<Body> {
+        self.request(
+            Request::builder()
+                .method("POST")
+                .uri(uri)
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(serde_json::to_vec(body).unwrap()))
+                .unwrap(),
+        )
+        .await
+    }
+
+    /// GET without an Authorization header.
+    pub async fn get_no_auth(&self, uri: &str) -> Response<Body> {
+        self.request(
+            Request::builder()
+                .uri(uri)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+    }
+
+    /// GET with a custom token value.
+    pub async fn get_with_token(&self, uri: &str, token: &str) -> Response<Body> {
+        self.request(
+            Request::builder()
+                .uri(uri)
+                .header(header::AUTHORIZATION, format!("Bearer {}", token))
+                .body(Body::empty())
                 .unwrap(),
         )
         .await

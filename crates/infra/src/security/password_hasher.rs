@@ -1,10 +1,10 @@
-use async_trait::async_trait;
 use argon2::{
     Argon2,
     password_hash::{PasswordHash, PasswordHasher as _, PasswordVerifier as _, SaltString},
 };
-use rand::rngs::OsRng;
+use async_trait::async_trait;
 use domain::ports::password_hasher::PasswordHasher;
+use rand::rngs::OsRng;
 
 pub struct Argon2PasswordHasher;
 
@@ -40,7 +40,7 @@ impl PasswordHasher for Argon2PasswordHasher {
         tokio::task::spawn_blocking(move || {
             let parsed_hash = PasswordHash::new(&hash_owned)
                 .map_err(|e| anyhow::anyhow!("invalid password hash format: {}", e))?;
-            
+
             Ok(Argon2::default()
                 .verify_password(password_owned.as_bytes(), &parsed_hash)
                 .is_ok())
