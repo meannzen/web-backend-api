@@ -20,6 +20,7 @@ use crate::handlers::health::{health_live, health_ready};
 use crate::handlers::users::{create_user, get_user, list_users};
 use crate::middleware::{auth::auth_middleware, cors::cors_layer, timing::timing_middleware};
 use crate::state::AppState;
+use shared::config::Environment;
 
 #[derive(OpenApi)]
 #[openapi(
@@ -93,9 +94,15 @@ pub fn router(state: AppState) -> Router {
             .unwrap(),
     );
 
-    Router::new()
-        .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()))
-        .merge(public_routes())
+    let mut router = Router::new()
+        .merge(public_routes());
+
+    if !matches!(config.application.environment, Environment::Production) {
+        router = router
+            .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()));
+    }
+
+    router
         .merge(protected_routes(state.clone()))
         // Layers applied innermost-first (last .layer() = outermost):
         // GovernorLayer innermost: wraps Route directly, avoids body-type conflicts
