@@ -120,55 +120,46 @@ impl UserRepository for PgUserRepository {
         let order = query.direction.sql_order();
         let op = query.direction.cursor_op();
 
-        let mut conditions: Vec<String> = Vec::new();
-        let mut param_idx: u32 = 1;
-
-        if query.search.is_some() {
-            conditions.push(format!("email ILIKE ${}", param_idx));
-            param_idx += 1;
-        }
-
-        if after.is_some() {
-            conditions.push(format!("({col}, id) {op} (${}, ${})", param_idx, param_idx + 1));
-            param_idx += 2;
-        }
-
-        let where_clause = if conditions.is_empty() {
-            String::new()
-        } else {
-            format!("WHERE {}", conditions.join(" AND "))
-        };
-
-        let sql = format!(
-            "SELECT id, email, password_hash, first_name, last_name, role, created_at, updated_at \
-             FROM users \
-             {where_clause} \
-             ORDER BY {col} {order}, id {order} \
-             LIMIT ${}",
-            param_idx
+        let mut query_builder: sqlx::QueryBuilder<sqlx::Postgres> = sqlx::QueryBuilder::new(
+            "SELECT id, email, password_hash, first_name, last_name, role, created_at, updated_at FROM users "
         );
 
-        let mut q = sqlx::query_as::<_, UserRow>(sqlx::AssertSqlSafe(sql));
+        let mut has_where = false;
 
         if let Some(ref search) = query.search {
+            query_builder.push("WHERE email ILIKE ");
             let escaped = search.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_");
-            q = q.bind(format!("%{}%", escaped));
+            query_builder.push_bind(format!("%{}%", escaped));
+            has_where = true;
         }
 
         if let Some(cursor) = after {
+            if has_where {
+                query_builder.push(" AND ");
+            } else {
+                query_builder.push(" WHERE ");
+            }
+            query_builder.push(format!("({col}, id) {op} ("));
+
             match cursor.value {
                 CursorValue::Timestamp(ts) => {
-                    q = q.bind(ts).bind(*cursor.id.as_uuid());
+                    query_builder.push_bind(ts);
                 }
                 CursorValue::Text(s) => {
-                    q = q.bind(s).bind(*cursor.id.as_uuid());
+                    query_builder.push_bind(s);
                 }
             }
+            query_builder.push(", ");
+            query_builder.push_bind(*cursor.id.as_uuid());
+            query_builder.push(")");
         }
 
-        q = q.bind(fetch_limit);
+        query_builder.push(format!(" ORDER BY {col} {order}, id {order} "));
+        query_builder.push(" LIMIT ");
+        query_builder.push_bind(fetch_limit);
 
-        let rows = q
+        let rows = query_builder
+            .build_query_as::<UserRow>()
             .fetch_all(&self.pool)
             .await
             .map_err(|e| UserError::Internal(anyhow::anyhow!(e).context("failed to list users")))?;

@@ -61,15 +61,15 @@ impl From<ApiSortDirection> for SortDirection {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct CursorPaginationParams {
+pub struct CursorPaginationParams<S = ApiSortField, D = ApiSortDirection> {
     #[serde(default = "default_limit")]
     pub limit: u32,
     pub after: Option<String>,
     pub search: Option<String>,
     #[serde(default)]
-    pub sort_by: ApiSortField,
+    pub sort_by: S,
     #[serde(default)]
-    pub sort_direction: ApiSortDirection,
+    pub sort_direction: D,
 }
 
 fn default_limit() -> u32 {

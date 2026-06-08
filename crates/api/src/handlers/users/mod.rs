@@ -1,6 +1,6 @@
 use axum::{
     Json,
-    extract::{Path, Query, State},
+    extract::{Path, State},
     http::StatusCode,
 };
 use domain::users::model::{SortDirection, SortField, UserId, UserListQuery};
@@ -11,10 +11,10 @@ use uuid::Uuid;
 use crate::AppResult;
 use crate::dtos::common::{
     ApiSortDirection, ApiSortField, CursorPaginatedResponse, CursorPaginationMeta,
-    CursorPaginationParams, ErrorResponse,
+    ErrorResponse,
 };
 use crate::dtos::user::{CreateUserRequest, UserResponse};
-use crate::extractors::{RequireAdmin, ValidatedJson};
+use crate::extractors::{Pagination, RequireAdmin, ValidatedJson};
 
 mod cursor;
 
@@ -36,29 +36,28 @@ mod cursor;
         (status = 403, description = "Admin role required", body = ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(user_service, params), fields(limit = params.limit))]
+#[tracing::instrument(skip(user_service, pagination), fields(limit = pagination.limit))]
 #[axum::debug_handler(state = crate::state::AppState)]
 pub async fn list_users(
     _: RequireAdmin,
     State(user_service): State<Arc<UserService>>,
-    Query(params): Query<CursorPaginationParams>,
+    pagination: Pagination,
 ) -> AppResult<Json<CursorPaginatedResponse<UserResponse>>> {
-    let limit = params.limit.clamp(1, 100);
-    let sort_by: SortField = params.sort_by.into();
-    let direction: SortDirection = params.sort_direction.into();
+    let sort_by: SortField = pagination.sort_by.into();
+    let direction: SortDirection = pagination.sort_direction.into();
 
-    let after = params
+    let after = pagination
         .after
         .as_deref()
-        .map(|s| cursor::decode(s, params.sort_by, params.sort_direction))
+        .map(|s| cursor::decode(s, pagination.sort_by, pagination.sort_direction))
         .transpose()?;
 
     let list_query = UserListQuery {
-        search: params.search,
+        search: pagination.search,
         sort_by,
         direction,
     };
-    let (users, has_next_page) = user_service.list(&list_query, after, limit).await?;
+    let (users, has_next_page) = user_service.list(&list_query, after, pagination.limit).await?;
 
     tracing::info!(count = users.len(), has_next_page, "listed users");
 
@@ -72,7 +71,7 @@ pub async fn list_users(
     Ok(Json(CursorPaginatedResponse {
         data: users,
         meta: CursorPaginationMeta {
-            limit,
+            limit: pagination.limit,
             has_next_page,
             next_cursor,
         },
