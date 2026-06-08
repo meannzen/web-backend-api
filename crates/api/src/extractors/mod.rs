@@ -12,6 +12,7 @@ use serde::de::DeserializeOwned;
 use shared::config::Config;
 use validator::Validate;
 
+use crate::dtos::common::{ApiSortDirection, ApiSortField};
 use crate::error::AppError;
 use crate::middleware::auth::{AuthUser, Claims, make_validation};
 
@@ -124,5 +125,39 @@ where
             return Err(AppError::Forbidden);
         }
         Ok(RequireAdmin(user))
+    }
+}
+
+pub struct Pagination<S = ApiSortField, D = ApiSortDirection> {
+    pub limit: u32,
+    pub after: Option<String>,
+    pub search: Option<String>,
+    pub sort_by: S,
+    pub sort_direction: D,
+}
+
+impl<S, T, D> FromRequestParts<T> for Pagination<S, D>
+where
+    T: Send + Sync,
+    S: DeserializeOwned + Default,
+    D: DeserializeOwned + Default,
+{
+    type Rejection = AppError;
+
+    async fn from_request_parts(parts: &mut Parts, state: &T) -> Result<Self, Self::Rejection> {
+        let axum::extract::Query(params) =
+            axum::extract::Query::<crate::dtos::common::CursorPaginationParams<S, D>>::from_request_parts(
+                parts, state,
+            )
+            .await
+            .map_err(|e| AppError::Validation(e.to_string()))?;
+
+        Ok(Pagination {
+            limit: params.limit.clamp(1, 100),
+            after: params.after,
+            search: params.search,
+            sort_by: params.sort_by,
+            sort_direction: params.sort_direction,
+        })
     }
 }
