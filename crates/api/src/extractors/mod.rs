@@ -128,34 +128,34 @@ where
     }
 }
 
-pub struct Pagination<S = ApiSortField, D = ApiSortDirection> {
+pub struct Pagination<F = crate::dtos::common::EmptyFilter, S = ApiSortField, D = ApiSortDirection> {
     pub limit: u32,
     pub after: Option<String>,
-    pub search: Option<String>,
+    pub filter: F,
     pub sort_by: S,
     pub sort_direction: D,
 }
 
-impl<S, T, D> FromRequestParts<T> for Pagination<S, D>
+impl<F, S, T, D> FromRequestParts<T> for Pagination<F, S, D>
 where
     T: Send + Sync,
+    F: DeserializeOwned,
     S: DeserializeOwned + Default,
     D: DeserializeOwned + Default,
 {
     type Rejection = AppError;
 
     async fn from_request_parts(parts: &mut Parts, state: &T) -> Result<Self, Self::Rejection> {
-        let axum::extract::Query(params) =
-            axum::extract::Query::<crate::dtos::common::CursorPaginationParams<S, D>>::from_request_parts(
-                parts, state,
-            )
-            .await
-            .map_err(|e| AppError::Validation(e.to_string()))?;
+        let axum::extract::Query(params) = axum::extract::Query::<
+            crate::dtos::common::CursorPaginationParams<F, S, D>,
+        >::from_request_parts(parts, state)
+        .await
+        .map_err(|e| AppError::Validation(e.to_string()))?;
 
         Ok(Pagination {
             limit: params.limit.clamp(1, 100),
             after: params.after,
-            search: params.search,
+            filter: params.filter,
             sort_by: params.sort_by,
             sort_direction: params.sort_direction,
         })

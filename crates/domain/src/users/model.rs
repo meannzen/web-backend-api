@@ -2,6 +2,8 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::pagination;
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Role {
@@ -125,71 +127,30 @@ pub enum SortField {
     Email,
 }
 
-impl SortField {
-    pub fn column(&self) -> &'static str {
+impl pagination::SortField for SortField {
+    fn column(&self) -> &'static str {
         match self {
             SortField::CreatedAt => "created_at",
             SortField::Email => "email",
         }
     }
 
-    pub fn parse_cursor_value(&self, s: &str) -> Result<CursorValue, String> {
+    fn parse_cursor_value(&self, s: &str) -> Result<pagination::CursorValue, String> {
         match self {
             SortField::CreatedAt => {
                 let ts = DateTime::parse_from_rfc3339(s)
                     .map_err(|_| "invalid cursor".to_string())?
                     .to_utc();
-                Ok(CursorValue::Timestamp(ts))
+                Ok(pagination::CursorValue::Timestamp(ts))
             }
-            SortField::Email => Ok(CursorValue::Text(s.to_string())),
+            SortField::Email => Ok(pagination::CursorValue::Text(s.to_string())),
         }
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SortDirection {
-    Asc,
-    Desc,
-}
-
-impl SortDirection {
-    pub fn sql_order(&self) -> &'static str {
-        match self {
-            SortDirection::Asc => "ASC",
-            SortDirection::Desc => "DESC",
-        }
-    }
-
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            SortDirection::Asc => "asc",
-            SortDirection::Desc => "desc",
-        }
-    }
-
-    pub fn cursor_op(&self) -> &'static str {
-        match self {
-            SortDirection::Asc => ">",
-            SortDirection::Desc => "<",
-        }
-    }
-}
-
-pub struct UserListQuery {
+pub struct UserFilter {
     pub search: Option<String>,
-    pub sort_by: SortField,
-    pub direction: SortDirection,
 }
 
-#[derive(Debug, Clone)]
-pub enum CursorValue {
-    Timestamp(DateTime<Utc>),
-    Text(String),
-}
-
-pub struct UserCursor {
-    pub sort_by: SortField,
-    pub direction: SortDirection,
-    pub value: CursorValue,
-    pub id: UserId,
-}
+pub type UserListQuery = pagination::ListQuery<UserFilter, SortField>;
+pub type UserCursor = pagination::Cursor<SortField>;

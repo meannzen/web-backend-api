@@ -3,20 +3,20 @@ use axum::{
     extract::{Path, State},
     http::StatusCode,
 };
-use domain::users::model::{SortDirection, SortField, UserId, UserListQuery};
+use domain::pagination::SortDirection;
+use domain::users::model::{SortField, UserId, UserListQuery};
 use domain::users::service::UserService;
 use std::sync::Arc;
 use uuid::Uuid;
 
 use crate::AppResult;
+use crate::cursor;
 use crate::dtos::common::{
     ApiSortDirection, ApiSortField, CursorPaginatedResponse, CursorPaginationMeta,
     ErrorResponse,
 };
-use crate::dtos::user::{CreateUserRequest, UserResponse};
+use crate::dtos::user::{CreateUserRequest, UserFilterParams, UserResponse};
 use crate::extractors::{Pagination, RequireAdmin, ValidatedJson};
-
-mod cursor;
 
 #[utoipa::path(
     get,
@@ -41,7 +41,7 @@ mod cursor;
 pub async fn list_users(
     _: RequireAdmin,
     State(user_service): State<Arc<UserService>>,
-    pagination: Pagination,
+    pagination: Pagination<UserFilterParams>,
 ) -> AppResult<Json<CursorPaginatedResponse<UserResponse>>> {
     let sort_by: SortField = pagination.sort_by.into();
     let direction: SortDirection = pagination.sort_direction.into();
@@ -49,11 +49,11 @@ pub async fn list_users(
     let after = pagination
         .after
         .as_deref()
-        .map(|s| cursor::decode(s, pagination.sort_by, pagination.sort_direction))
+        .map(|s| cursor::decode(s, sort_by, direction))
         .transpose()?;
 
     let list_query = UserListQuery {
-        search: pagination.search,
+        filter: pagination.filter.into(),
         sort_by,
         direction,
     };
