@@ -16,6 +16,9 @@ struct RawCursor {
 fn decode_raw(s: &str, expected_sort: &str, expected_dir: &str) -> Result<RawCursor, AppError> {
     let bytes = URL_SAFE_NO_PAD.decode(s).map_err(|_| invalid_cursor())?;
     let raw = String::from_utf8(bytes).map_err(|_| invalid_cursor())?;
+    if raw.contains('\0') {
+        return Err(invalid_cursor());
+    }
 
     // format: sort_field|direction|sort_value|uuid
     // splitn(4) keeps sort_value whole even if it ever contains '|'
