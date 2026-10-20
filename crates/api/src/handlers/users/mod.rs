@@ -9,6 +9,7 @@ use domain::users::service::UserService;
 use std::sync::Arc;
 use uuid::Uuid;
 
+use crate::error::AppError;
 use crate::AppResult;
 use crate::cursor;
 use crate::dtos::common::{
@@ -43,6 +44,10 @@ pub async fn list_users(
     State(user_service): State<Arc<UserService>>,
     pagination: Pagination<UserFilterParams>,
 ) -> AppResult<Json<CursorPaginatedResponse<UserResponse>>> {
+    if pagination.filter.search.as_deref().is_some_and(|s| s.contains('\0')) {
+        return Err(AppError::Validation("invalid search term".to_string()));
+    }
+
     let sort_by: SortField = pagination.sort_by.into();
     let direction: SortDirection = pagination.sort_direction.into();
 

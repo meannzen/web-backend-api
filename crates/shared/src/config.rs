@@ -74,7 +74,7 @@ fn default_max_connections() -> u32 {
 }
 
 fn default_environment() -> Environment {
-    Environment::Development
+    Environment::Production
 }
 
 fn default_log_level() -> String {
