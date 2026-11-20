@@ -88,14 +88,26 @@ pub fn router(state: AppState) -> Router {
 
     let governor_config = Arc::new(
         GovernorConfigBuilder::default()
-            .per_second(5)
-            .burst_size(10)
+            // per_second(n) replenishes one token every n seconds, so use
+            // per_millisecond(200) for a sustained 5 req/s per IP.
+            .per_millisecond(200)
+            .burst_size(30)
+            .finish()
+            .unwrap(),
+    );
+
+    // Stricter limit for credential endpoints: burst of 5, then one request per 6s per IP.
+    let auth_governor_config = Arc::new(
+        GovernorConfigBuilder::default()
+            .per_second(6)
+            .burst_size(5)
             .finish()
             .unwrap(),
     );
 
     let mut router = Router::new()
-        .merge(public_routes());
+        .merge(public_routes())
+        .merge(auth_routes().layer(GovernorLayer::new(auth_governor_config)));
 
     if !matches!(config.application.environment, Environment::Production) {
         router = router
@@ -153,6 +165,10 @@ fn public_routes() -> Router<AppState> {
     Router::new()
         .route("/health", get(health_live))
         .route("/health/ready", get(health_ready))
+}
+
+fn auth_routes() -> Router<AppState> {
+    Router::new()
         .route("/api/v1/auth/register", post(register))
         .route("/api/v1/auth/login", post(login))
 }

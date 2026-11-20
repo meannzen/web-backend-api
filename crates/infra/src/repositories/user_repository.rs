@@ -1,12 +1,13 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use domain::users::errors::UserError;
-use domain::users::model::{
-    CursorValue, Email, NewUser, Role, User, UserId, UserCursor, UserListQuery,
-};
+use domain::pagination::SortField as _;
+use domain::users::model::{Email, NewUser, Role, User, UserId, UserCursor, UserListQuery};
 use domain::users::port::UserRepository;
 use sqlx::PgPool;
 use uuid::Uuid;
+
+use crate::pagination;
 
 #[derive(sqlx::FromRow)]
 struct UserRow {
@@ -126,37 +127,19 @@ impl UserRepository for PgUserRepository {
 
         let mut has_where = false;
 
-        if let Some(ref search) = query.search {
-            query_builder.push("WHERE email ILIKE ");
-            let escaped = search.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_");
-            query_builder.push_bind(format!("%{}%", escaped));
-            has_where = true;
+        if let Some(ref search) = query.filter.search {
+            pagination::push_ilike_filter(&mut query_builder, "email", search, &mut has_where);
         }
 
-        if let Some(cursor) = after {
-            if has_where {
-                query_builder.push(" AND ");
-            } else {
-                query_builder.push(" WHERE ");
-            }
-            query_builder.push(format!("({col}, id) {op} ("));
+        pagination::push_cursor_condition(
+            &mut query_builder,
+            col,
+            op,
+            after.as_ref().map(|c| (&c.value, c.id)),
+            &mut has_where,
+        );
 
-            match cursor.value {
-                CursorValue::Timestamp(ts) => {
-                    query_builder.push_bind(ts);
-                }
-                CursorValue::Text(s) => {
-                    query_builder.push_bind(s);
-                }
-            }
-            query_builder.push(", ");
-            query_builder.push_bind(*cursor.id.as_uuid());
-            query_builder.push(")");
-        }
-
-        query_builder.push(format!(" ORDER BY {col} {order}, id {order} "));
-        query_builder.push(" LIMIT ");
-        query_builder.push_bind(fetch_limit);
+        pagination::push_order_and_limit(&mut query_builder, col, order, fetch_limit);
 
         let rows = query_builder
             .build_query_as::<UserRow>()
@@ -164,9 +147,7 @@ impl UserRepository for PgUserRepository {
             .await
             .map_err(|e| UserError::Internal(anyhow::anyhow!(e).context("failed to list users")))?;
 
-        let has_next_page = rows.len() > limit as usize;
-        let mut rows = rows;
-        rows.truncate(limit as usize);
+        let (rows, has_next_page) = pagination::split_has_next_page(rows, limit);
 
         let users = rows
             .into_iter()

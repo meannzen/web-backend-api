@@ -8,10 +8,9 @@ use axum::body::Body;
 use axum::extract::ConnectInfo;
 use axum::http::{Request, Response, header};
 use chrono::Utc;
+use domain::pagination::{CursorValue, SortDirection};
 use domain::users::errors::UserError;
-use domain::users::model::{
-    CursorValue, Email, NewUser, SortField, User, UserId, UserCursor, UserListQuery,
-};
+use domain::users::model::{Email, NewUser, SortField, User, UserId, UserCursor, UserListQuery};
 use domain::users::port::UserRepository;
 use domain::users::service::UserService;
 use infra::db::Database;
@@ -165,7 +164,7 @@ impl UserRepository for InMemoryUserRepository {
         let sorted = users.clone();
 
         // Apply search filter
-        let filtered: Vec<User> = if let Some(ref search) = query.search {
+        let filtered: Vec<User> = if let Some(ref search) = query.filter.search {
             let lower = search.to_lowercase();
             sorted.into_iter().filter(|u| u.email().as_ref().contains(&lower)).collect()
         } else {
@@ -180,8 +179,8 @@ impl UserRepository for InMemoryUserRepository {
                     let ord = a.created_at().cmp(&b.created_at())
                         .then_with(|| a.id().as_uuid().cmp(b.id().as_uuid()));
                     match query.direction {
-                        domain::users::model::SortDirection::Asc => ord,
-                        domain::users::model::SortDirection::Desc => ord.reverse(),
+                        SortDirection::Asc => ord,
+                        SortDirection::Desc => ord.reverse(),
                     }
                 });
             }
@@ -190,8 +189,8 @@ impl UserRepository for InMemoryUserRepository {
                     let ord = a.email().as_ref().cmp(b.email().as_ref())
                         .then_with(|| a.id().as_uuid().cmp(b.id().as_uuid()));
                     match query.direction {
-                        domain::users::model::SortDirection::Asc => ord,
-                        domain::users::model::SortDirection::Desc => ord.reverse(),
+                        SortDirection::Asc => ord,
+                        SortDirection::Desc => ord.reverse(),
                     }
                 });
             }
@@ -202,24 +201,24 @@ impl UserRepository for InMemoryUserRepository {
             let is_after: Box<dyn Fn(&User) -> bool> = match (&cursor.value, cursor.sort_by) {
                 (CursorValue::Timestamp(ts), SortField::CreatedAt) => {
                     let ts = *ts;
-                    let uuid = *cursor.id.as_uuid();
+                    let uuid = cursor.id;
                     match query.direction {
-                        domain::users::model::SortDirection::Desc => Box::new(move |u: &User| {
+                        SortDirection::Desc => Box::new(move |u: &User| {
                             (u.created_at(), u.id().as_uuid()) < (ts, &uuid)
                         }),
-                        domain::users::model::SortDirection::Asc => Box::new(move |u: &User| {
+                        SortDirection::Asc => Box::new(move |u: &User| {
                             (u.created_at(), u.id().as_uuid()) > (ts, &uuid)
                         }),
                     }
                 }
                 (CursorValue::Text(s), SortField::Email) => {
                     let s = s.clone();
-                    let uuid = *cursor.id.as_uuid();
+                    let uuid = cursor.id;
                     match query.direction {
-                        domain::users::model::SortDirection::Desc => Box::new(move |u: &User| {
+                        SortDirection::Desc => Box::new(move |u: &User| {
                             (u.email().as_ref(), u.id().as_uuid()) < (s.as_str(), &uuid)
                         }),
-                        domain::users::model::SortDirection::Asc => Box::new(move |u: &User| {
+                        SortDirection::Asc => Box::new(move |u: &User| {
                             (u.email().as_ref(), u.id().as_uuid()) > (s.as_str(), &uuid)
                         }),
                     }

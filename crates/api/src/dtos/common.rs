@@ -1,4 +1,5 @@
-use domain::users::model::{SortDirection, SortField};
+use domain::pagination::SortDirection;
+use domain::users::model::SortField;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
@@ -60,16 +61,20 @@ impl From<ApiSortDirection> for SortDirection {
     }
 }
 
+#[derive(Debug, Deserialize, Default)]
+pub struct EmptyFilter {}
+
 #[derive(Debug, Deserialize)]
-pub struct CursorPaginationParams<S = ApiSortField, D = ApiSortDirection> {
+pub struct CursorPaginationParams<F = EmptyFilter, S = ApiSortField, D = ApiSortDirection> {
     #[serde(default = "default_limit")]
     pub limit: u32,
     pub after: Option<String>,
-    pub search: Option<String>,
     #[serde(default)]
     pub sort_by: S,
     #[serde(default)]
     pub sort_direction: D,
+    #[serde(flatten)]
+    pub filter: F,
 }
 
 fn default_limit() -> u32 {

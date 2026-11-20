@@ -1,8 +1,11 @@
 use chrono::{DateTime, Utc};
+use domain::users::model::SortField;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 use validator::Validate;
+
+use crate::cursor::CursorSource;
 
 #[derive(Debug, Deserialize, Validate, ToSchema)]
 pub struct CreateUserRequest {
@@ -38,5 +41,29 @@ impl From<domain::users::model::User> for UserResponse {
             created_at: u.created_at(),
             updated_at: u.updated_at(),
         }
+    }
+}
+
+impl CursorSource<SortField> for UserResponse {
+    fn cursor_value(&self, field: SortField) -> String {
+        match field {
+            SortField::CreatedAt => self.created_at.to_rfc3339(),
+            SortField::Email => self.email.clone(),
+        }
+    }
+
+    fn cursor_id(&self) -> String {
+        self.id.to_string()
+    }
+}
+
+#[derive(Debug, Deserialize, Default, ToSchema)]
+pub struct UserFilterParams {
+    pub search: Option<String>,
+}
+
+impl From<UserFilterParams> for domain::users::model::UserFilter {
+    fn from(f: UserFilterParams) -> Self {
+        domain::users::model::UserFilter { search: f.search }
     }
 }
