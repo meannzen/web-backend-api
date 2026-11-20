@@ -23,7 +23,7 @@ async fn create_user_returns_201(pool: PgPool) {
     assert_eq!(body["email"], "alice@example.com");
     assert_eq!(body["first_name"], "Alice");
     assert_eq!(body["last_name"], "Smith");
-    assert_eq!(body["role"], "user");
+    assert_eq!(body["role"], "teacher");
     assert!(body["id"].is_string());
     assert!(body["created_at"].is_string());
     assert!(body["updated_at"].is_string());
@@ -169,12 +169,20 @@ async fn list_users_cursor_pagination_traverses_all_pages(pool: PgPool) {
     assert_eq!(body["meta"]["has_next_page"], true);
     let cursor = body["meta"]["next_cursor"].as_str().unwrap().to_string();
 
-    let body = body_json(app.get_as_admin(&format!("/api/v1/users?limit=2&after={cursor}")).await).await;
+    let body = body_json(
+        app.get_as_admin(&format!("/api/v1/users?limit=2&after={cursor}"))
+            .await,
+    )
+    .await;
     assert_eq!(body["data"].as_array().unwrap().len(), 2);
     assert_eq!(body["meta"]["has_next_page"], true);
     let cursor = body["meta"]["next_cursor"].as_str().unwrap().to_string();
 
-    let body = body_json(app.get_as_admin(&format!("/api/v1/users?limit=2&after={cursor}")).await).await;
+    let body = body_json(
+        app.get_as_admin(&format!("/api/v1/users?limit=2&after={cursor}"))
+            .await,
+    )
+    .await;
     assert_eq!(body["data"].as_array().unwrap().len(), 1);
     assert_eq!(body["meta"]["has_next_page"], false);
     assert_eq!(body["meta"]["next_cursor"], serde_json::Value::Null);

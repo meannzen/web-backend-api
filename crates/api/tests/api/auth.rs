@@ -28,7 +28,7 @@ async fn register_returns_201_with_user_data() {
     assert_eq!(body["email"], "alice@example.com");
     assert_eq!(body["first_name"], "Alice");
     assert_eq!(body["last_name"], "Smith");
-    assert_eq!(body["role"], "user");
+    assert_eq!(body["role"], "teacher");
     assert!(body["id"].is_string());
     assert!(body["created_at"].is_string());
 }
@@ -218,7 +218,9 @@ async fn missing_token_returns_401() {
 async fn invalid_token_returns_401() {
     let app = TestApp::new();
 
-    let response = app.get_with_token("/api/v1/users", "not-a-valid-jwt-token").await;
+    let response = app
+        .get_with_token("/api/v1/users", "not-a-valid-jwt-token")
+        .await;
     assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
 }
 
@@ -242,7 +244,7 @@ async fn wrong_secret_token_returns_401() {
         &TestClaims {
             sub: "00000000-0000-0000-0000-000000000001".to_string(),
             email: "test@example.com".to_string(),
-            role: "user".to_string(),
+            role: "teacher".to_string(),
             iss: "tpa".to_string(),
             aud: "tpa-api".to_string(),
             exp: 9_999_999_999,

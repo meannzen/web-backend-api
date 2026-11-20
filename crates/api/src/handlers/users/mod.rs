@@ -9,14 +9,13 @@ use domain::users::service::UserService;
 use std::sync::Arc;
 use uuid::Uuid;
 
-use crate::error::AppError;
 use crate::AppResult;
 use crate::cursor;
 use crate::dtos::common::{
-    ApiSortDirection, ApiSortField, CursorPaginatedResponse, CursorPaginationMeta,
-    ErrorResponse,
+    ApiSortDirection, ApiSortField, CursorPaginatedResponse, CursorPaginationMeta, ErrorResponse,
 };
 use crate::dtos::user::{CreateUserRequest, UserFilterParams, UserResponse};
+use crate::error::AppError;
 use crate::extractors::{Pagination, RequireAdmin, ValidatedJson};
 
 #[utoipa::path(
@@ -44,7 +43,12 @@ pub async fn list_users(
     State(user_service): State<Arc<UserService>>,
     pagination: Pagination<UserFilterParams>,
 ) -> AppResult<Json<CursorPaginatedResponse<UserResponse>>> {
-    if pagination.filter.search.as_deref().is_some_and(|s| s.contains('\0')) {
+    if pagination
+        .filter
+        .search
+        .as_deref()
+        .is_some_and(|s| s.contains('\0'))
+    {
         return Err(AppError::Validation("invalid search term".to_string()));
     }
 
@@ -62,7 +66,9 @@ pub async fn list_users(
         sort_by,
         direction,
     };
-    let (users, has_next_page) = user_service.list(&list_query, after, pagination.limit).await?;
+    let (users, has_next_page) = user_service
+        .list(&list_query, after, pagination.limit)
+        .await?;
 
     tracing::info!(count = users.len(), has_next_page, "listed users");
 
@@ -105,7 +111,13 @@ pub async fn create_user(
     ValidatedJson(req): ValidatedJson<CreateUserRequest>,
 ) -> AppResult<(StatusCode, Json<UserResponse>)> {
     let user = user_service
-        .create(&req.email, req.password, req.first_name, req.last_name, domain::users::model::Role::User)
+        .create(
+            &req.email,
+            req.password,
+            req.first_name,
+            req.last_name,
+            domain::users::model::Role::Teacher,
+        )
         .await?;
 
     tracing::info!(user_id = %user.id().as_uuid(), "user created");

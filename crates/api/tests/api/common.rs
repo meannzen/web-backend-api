@@ -10,7 +10,7 @@ use axum::http::{Request, Response, header};
 use chrono::Utc;
 use domain::pagination::{CursorValue, SortDirection};
 use domain::users::errors::UserError;
-use domain::users::model::{Email, NewUser, SortField, User, UserId, UserCursor, UserListQuery};
+use domain::users::model::{Email, NewUser, SortField, User, UserCursor, UserId, UserListQuery};
 use domain::users::port::UserRepository;
 use domain::users::service::UserService;
 use infra::db::Database;
@@ -26,7 +26,7 @@ pub fn make_admin_token() -> String {
 }
 
 pub fn make_test_token() -> String {
-    make_token("user")
+    make_token("teacher")
 }
 
 fn make_token(role: &str) -> String {
@@ -102,7 +102,10 @@ impl UserRepository for InMemoryUserRepository {
         }
 
         let mut users = self.users.lock().unwrap();
-        if users.iter().any(|u| u.email().as_ref() == new_user.email.as_ref()) {
+        if users
+            .iter()
+            .any(|u| u.email().as_ref() == new_user.email.as_ref())
+        {
             return Err(UserError::EmailTaken);
         }
 
@@ -166,7 +169,10 @@ impl UserRepository for InMemoryUserRepository {
         // Apply search filter
         let filtered: Vec<User> = if let Some(ref search) = query.filter.search {
             let lower = search.to_lowercase();
-            sorted.into_iter().filter(|u| u.email().as_ref().contains(&lower)).collect()
+            sorted
+                .into_iter()
+                .filter(|u| u.email().as_ref().contains(&lower))
+                .collect()
         } else {
             sorted
         };
@@ -176,7 +182,9 @@ impl UserRepository for InMemoryUserRepository {
         match query.sort_by {
             SortField::CreatedAt => {
                 sorted.sort_by(|a, b| {
-                    let ord = a.created_at().cmp(&b.created_at())
+                    let ord = a
+                        .created_at()
+                        .cmp(&b.created_at())
                         .then_with(|| a.id().as_uuid().cmp(b.id().as_uuid()));
                     match query.direction {
                         SortDirection::Asc => ord,
@@ -186,7 +194,10 @@ impl UserRepository for InMemoryUserRepository {
             }
             SortField::Email => {
                 sorted.sort_by(|a, b| {
-                    let ord = a.email().as_ref().cmp(b.email().as_ref())
+                    let ord = a
+                        .email()
+                        .as_ref()
+                        .cmp(b.email().as_ref())
                         .then_with(|| a.id().as_uuid().cmp(b.id().as_uuid()));
                     match query.direction {
                         SortDirection::Asc => ord,
@@ -225,7 +236,11 @@ impl UserRepository for InMemoryUserRepository {
                 }
                 _ => Box::new(|_: &User| false),
             };
-            sorted.into_iter().filter(|u| is_after(u)).take(limit as usize + 1).collect()
+            sorted
+                .into_iter()
+                .filter(|u| is_after(u))
+                .take(limit as usize + 1)
+                .collect()
         } else {
             sorted.into_iter().take(limit as usize + 1).collect()
         };
@@ -298,7 +313,10 @@ impl TestApp {
         self.request(
             Request::builder()
                 .uri(uri)
-                .header(header::AUTHORIZATION, format!("Bearer {}", make_test_token()))
+                .header(
+                    header::AUTHORIZATION,
+                    format!("Bearer {}", make_test_token()),
+                )
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -311,7 +329,10 @@ impl TestApp {
                 .method("POST")
                 .uri(uri)
                 .header(header::CONTENT_TYPE, "application/json")
-                .header(header::AUTHORIZATION, format!("Bearer {}", make_test_token()))
+                .header(
+                    header::AUTHORIZATION,
+                    format!("Bearer {}", make_test_token()),
+                )
                 .body(Body::from(serde_json::to_vec(body).unwrap()))
                 .unwrap(),
         )
@@ -322,7 +343,10 @@ impl TestApp {
         self.request(
             Request::builder()
                 .uri(uri)
-                .header(header::AUTHORIZATION, format!("Bearer {}", make_admin_token()))
+                .header(
+                    header::AUTHORIZATION,
+                    format!("Bearer {}", make_admin_token()),
+                )
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -335,7 +359,10 @@ impl TestApp {
                 .method("POST")
                 .uri(uri)
                 .header(header::CONTENT_TYPE, "application/json")
-                .header(header::AUTHORIZATION, format!("Bearer {}", make_admin_token()))
+                .header(
+                    header::AUTHORIZATION,
+                    format!("Bearer {}", make_admin_token()),
+                )
                 .body(Body::from(serde_json::to_vec(body).unwrap()))
                 .unwrap(),
         )
@@ -357,13 +384,8 @@ impl TestApp {
 
     /// GET without an Authorization header.
     pub async fn get_no_auth(&self, uri: &str) -> Response<Body> {
-        self.request(
-            Request::builder()
-                .uri(uri)
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
+        self.request(Request::builder().uri(uri).body(Body::empty()).unwrap())
+            .await
     }
 
     /// GET with a custom token value.

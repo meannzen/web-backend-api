@@ -27,7 +27,9 @@ async fn create_user_non_admin_returns_403() {
 #[tokio::test]
 async fn get_user_non_admin_returns_403() {
     let app = TestApp::new();
-    let response = app.get("/api/v1/users/00000000-0000-0000-0000-000000000001").await;
+    let response = app
+        .get("/api/v1/users/00000000-0000-0000-0000-000000000001")
+        .await;
     assert_eq!(response.status(), StatusCode::FORBIDDEN);
 }
 
@@ -50,7 +52,7 @@ async fn create_user_returns_201() {
     assert_eq!(body["email"], "user@example.com");
     assert_eq!(body["first_name"], "Test");
     assert_eq!(body["last_name"], "User");
-    assert_eq!(body["role"], "user");
+    assert_eq!(body["role"], "teacher");
     assert!(body["id"].is_string());
     assert!(body["created_at"].is_string());
     assert!(body["updated_at"].is_string());
@@ -171,7 +173,9 @@ async fn list_users_cursor_pagination_traverses_all_pages() {
     assert_eq!(body["meta"]["has_next_page"], true);
     let cursor = body["meta"]["next_cursor"].as_str().unwrap().to_string();
 
-    let response = app.get_as_admin(&format!("/api/v1/users?limit=2&after={}", cursor)).await;
+    let response = app
+        .get_as_admin(&format!("/api/v1/users?limit=2&after={}", cursor))
+        .await;
     assert_eq!(response.status(), StatusCode::OK);
 
     let body = body_json(response).await;
@@ -179,7 +183,9 @@ async fn list_users_cursor_pagination_traverses_all_pages() {
     assert_eq!(body["meta"]["has_next_page"], true);
     let cursor = body["meta"]["next_cursor"].as_str().unwrap().to_string();
 
-    let response = app.get_as_admin(&format!("/api/v1/users?limit=2&after={}", cursor)).await;
+    let response = app
+        .get_as_admin(&format!("/api/v1/users?limit=2&after={}", cursor))
+        .await;
     assert_eq!(response.status(), StatusCode::OK);
 
     let body = body_json(response).await;
@@ -192,7 +198,9 @@ async fn list_users_cursor_pagination_traverses_all_pages() {
 async fn list_users_returns_400_on_invalid_cursor() {
     let app = TestApp::new();
 
-    let response = app.get_as_admin("/api/v1/users?after=not-a-valid-cursor!!!").await;
+    let response = app
+        .get_as_admin("/api/v1/users?after=not-a-valid-cursor!!!")
+        .await;
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
 }
 
@@ -256,7 +264,9 @@ async fn list_users_sort_by_email_asc() {
     app.post_as_admin("/api/v1/users", &json!({ "email": "bob@example.com", "password": "secret123", "first_name": "Bob", "last_name": "B" }))
         .await;
 
-    let response = app.get_as_admin("/api/v1/users?sort_by=email&sort_direction=asc").await;
+    let response = app
+        .get_as_admin("/api/v1/users?sort_by=email&sort_direction=asc")
+        .await;
     assert_eq!(response.status(), StatusCode::OK);
 
     let body = body_json(response).await;
@@ -267,18 +277,33 @@ async fn list_users_sort_by_email_asc() {
         .map(|u| u["email"].as_str().unwrap())
         .collect();
 
-    assert_eq!(emails, vec!["alice@example.com", "bob@example.com", "charlie@example.com"]);
+    assert_eq!(
+        emails,
+        vec![
+            "alice@example.com",
+            "bob@example.com",
+            "charlie@example.com"
+        ]
+    );
 }
 
 #[tokio::test]
 async fn list_users_sort_by_email_cursor_traverses_pages() {
     let app = TestApp::new();
 
-    for email in ["alice@x.com", "bob@x.com", "charlie@x.com", "diana@x.com", "eve@x.com"] {
+    for email in [
+        "alice@x.com",
+        "bob@x.com",
+        "charlie@x.com",
+        "diana@x.com",
+        "eve@x.com",
+    ] {
         app.post_as_admin("/api/v1/users", &json!({ "email": email, "password": "secret123", "first_name": "Test", "last_name": "User" })).await;
     }
 
-    let response = app.get_as_admin("/api/v1/users?sort_by=email&sort_direction=asc&limit=2").await;
+    let response = app
+        .get_as_admin("/api/v1/users?sort_by=email&sort_direction=asc&limit=2")
+        .await;
     assert_eq!(response.status(), StatusCode::OK);
 
     let body = body_json(response).await;
@@ -287,7 +312,10 @@ async fn list_users_sort_by_email_cursor_traverses_pages() {
     let cursor = body["meta"]["next_cursor"].as_str().unwrap().to_string();
 
     let response = app
-        .get_as_admin(&format!("/api/v1/users?sort_by=email&sort_direction=asc&limit=2&after={}", cursor))
+        .get_as_admin(&format!(
+            "/api/v1/users?sort_by=email&sort_direction=asc&limit=2&after={}",
+            cursor
+        ))
         .await;
     assert_eq!(response.status(), StatusCode::OK);
 
@@ -306,12 +334,17 @@ async fn list_users_cursor_sort_mismatch_returns_400() {
     app.post_as_admin("/api/v1/users", &json!({ "email": "c@example.com", "password": "secret123", "first_name": "C", "last_name": "C" }))
         .await;
 
-    let response = app.get_as_admin("/api/v1/users?sort_by=email&sort_direction=asc&limit=1").await;
+    let response = app
+        .get_as_admin("/api/v1/users?sort_by=email&sort_direction=asc&limit=1")
+        .await;
     let body = body_json(response).await;
     let cursor = body["meta"]["next_cursor"].as_str().unwrap().to_string();
 
     let response = app
-        .get_as_admin(&format!("/api/v1/users?sort_by=created_at&after={}", cursor))
+        .get_as_admin(&format!(
+            "/api/v1/users?sort_by=created_at&after={}",
+            cursor
+        ))
         .await;
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
 }

@@ -7,15 +7,19 @@ use crate::pagination;
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Role {
-    User,
+    Teacher,
     Admin,
+    Principal,
+    Hr,
 }
 
 impl Role {
     pub fn as_str(&self) -> &'static str {
         match self {
-            Role::User => "user",
+            Role::Teacher => "teacher",
             Role::Admin => "admin",
+            Role::Principal => "principal",
+            Role::Hr => "hr",
         }
     }
 }
@@ -25,8 +29,10 @@ impl std::str::FromStr for Role {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "user" => Ok(Role::User),
+            "teacher" => Ok(Role::Teacher),
             "admin" => Ok(Role::Admin),
+            "principal" => Ok(Role::Principal),
+            "hr" => Ok(Role::Hr),
             other => Err(format!("invalid role: {other}")),
         }
     }
@@ -98,7 +104,12 @@ pub struct User {
 }
 
 impl User {
-    pub fn new(id: UserId, data: NewUser, created_at: DateTime<Utc>, updated_at: DateTime<Utc>) -> Self {
+    pub fn new(
+        id: UserId,
+        data: NewUser,
+        created_at: DateTime<Utc>,
+        updated_at: DateTime<Utc>,
+    ) -> Self {
         Self {
             id,
             email: data.email,
@@ -111,14 +122,30 @@ impl User {
         }
     }
 
-    pub fn id(&self) -> &UserId { &self.id }
-    pub fn email(&self) -> &Email { &self.email }
-    pub fn password_hash(&self) -> &str { &self.password_hash }
-    pub fn first_name(&self) -> &str { &self.first_name }
-    pub fn last_name(&self) -> &str { &self.last_name }
-    pub fn role(&self) -> &Role { &self.role }
-    pub fn created_at(&self) -> DateTime<Utc> { self.created_at }
-    pub fn updated_at(&self) -> DateTime<Utc> { self.updated_at }
+    pub fn id(&self) -> &UserId {
+        &self.id
+    }
+    pub fn email(&self) -> &Email {
+        &self.email
+    }
+    pub fn password_hash(&self) -> &str {
+        &self.password_hash
+    }
+    pub fn first_name(&self) -> &str {
+        &self.first_name
+    }
+    pub fn last_name(&self) -> &str {
+        &self.last_name
+    }
+    pub fn role(&self) -> &Role {
+        &self.role
+    }
+    pub fn created_at(&self) -> DateTime<Utc> {
+        self.created_at
+    }
+    pub fn updated_at(&self) -> DateTime<Utc> {
+        self.updated_at
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -1,9 +1,9 @@
+use axum::http::header;
 use axum::{
     extract::{Request, State},
     middleware::Next,
     response::Response,
 };
-use axum::http::header;
 use domain::users::model::Role;
 use jsonwebtoken::{Algorithm, DecodingKey, Validation, decode};
 use secrecy::ExposeSecret;

@@ -1,4 +1,4 @@
-use std::time::Duration;
+//use std::time::Duration;
 
 use api::routes::router;
 use api::shutdown::shutdown_signal;
@@ -7,7 +7,7 @@ use infra::db::Database;
 use shared::config::Config;
 use shared::observability;
 use tokio::net::TcpListener;
-use tokio::time::interval;
+//use tokio::time::interval;
 use tokio_util::sync::CancellationToken;
 
 #[tokio::main]
@@ -69,17 +69,17 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn schedule_job(shutdown: CancellationToken) {
-    let mut ticker = interval(Duration::from_secs(5));
-    loop {
-        tokio::select! {
-            _ = ticker.tick()=> {
-                tracing::info!("do something");
-            },
-            _= shutdown.cancelled()=> {
-                tracing::info!("cache cleanup shutting down");
-                return;
-            }
-        }
-    }
+async fn schedule_job(_shutdown: CancellationToken) {
+    // let mut ticker = interval(Duration::from_secs(5));
+    // loop {
+    //     tokio::select! {
+    //         _ = ticker.tick()=> {
+    //             tracing::info!("do something");
+    //         },
+    //         _= shutdown.cancelled()=> {
+    //             tracing::info!("cache cleanup shutting down");
+    //             return;
+    //         }
+    //     }
+    // }
 }
