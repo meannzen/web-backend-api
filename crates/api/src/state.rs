@@ -22,7 +22,7 @@ impl AppState {
     pub fn new(config: Config, db: Database) -> Self {
         let user_repo = Arc::new(PgUserRepository::new(db.pool().clone()));
         let board_repo = Arc::new(PgBoardRepository::new(db.pool().clone()));
-        let hasher = Arc::new(Argon2PasswordHasher::new());
+        let hasher = Arc::new(Argon2PasswordHasher::from_settings(&config.password_hasher));
         AppState {
             config: Arc::new(config),
             db: Arc::new(db),

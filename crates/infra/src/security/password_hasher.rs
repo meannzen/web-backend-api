@@ -7,12 +7,10 @@ use argon2::{
     password_hash::{PasswordHash, PasswordHasher as _, PasswordVerifier as _, SaltString},
 };
 use async_trait::async_trait;
-use domain::ports::password_hasher::{HasherBusy, PasswordHasher};
+use domain::ports::password_hasher::{PasswordHasher, PasswordHasherError};
 use rand::rngs::OsRng;
+use shared::config::PasswordHasherSettings;
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
-
-/// How long a request waits for a free hashing slot before giving up with `HasherBusy`.
-const DEFAULT_ACQUIRE_TIMEOUT: Duration = Duration::from_secs(2);
 
 /// Argon2id hasher that caps concurrent hashes. Each hash holds ~19 MiB and a full
 /// core, so running more at once than there are cores adds memory and starves the
@@ -24,8 +22,17 @@ pub struct Argon2PasswordHasher {
 
 impl Argon2PasswordHasher {
     pub fn new() -> Self {
-        let cores = std::thread::available_parallelism().map_or(1, |n| n.get());
-        Self::with_limits(cores, DEFAULT_ACQUIRE_TIMEOUT)
+        Self::from_settings(&PasswordHasherSettings::default())
+    }
+
+    pub fn from_settings(settings: &PasswordHasherSettings) -> Self {
+        let max_concurrent = settings
+            .max_concurrent
+            .unwrap_or_else(|| std::thread::available_parallelism().map_or(1, |n| n.get()));
+        Self::with_limits(
+            max_concurrent,
+            Duration::from_millis(settings.acquire_timeout_ms),
+        )
     }
 
     pub fn with_limits(max_concurrent: usize, acquire_timeout: Duration) -> Self {
@@ -35,11 +42,17 @@ impl Argon2PasswordHasher {
         }
     }
 
-    async fn acquire(&self) -> Result<OwnedSemaphorePermit, anyhow::Error> {
-        tokio::time::timeout(self.acquire_timeout, self.permits.clone().acquire_owned())
-            .await
-            .map_err(|_| anyhow::Error::new(HasherBusy))?
-            .context("password hasher semaphore closed")
+    async fn acquire(&self) -> Result<OwnedSemaphorePermit, PasswordHasherError> {
+        let permit =
+            tokio::time::timeout(self.acquire_timeout, self.permits.clone().acquire_owned())
+                .await
+                .map_err(|_| PasswordHasherError::Busy {
+                    // A request that waited this long found no free slot, so the queue
+                    // needs at least about that long to drain.
+                    retry_after: self.acquire_timeout,
+                })?
+                .context("password hasher semaphore closed")?;
+        Ok(permit)
     }
 }
 
@@ -67,7 +80,7 @@ fn verify_password(password: &str, hash: &str) -> Result<bool, anyhow::Error> {
 
 #[async_trait]
 impl PasswordHasher for Argon2PasswordHasher {
-    async fn hash(&self, password: String) -> Result<String, anyhow::Error> {
+    async fn hash(&self, password: String) -> Result<String, PasswordHasherError> {
         let permit = self.acquire().await?;
         tokio::task::spawn_blocking(move || {
             // Held inside the closure so the slot is released only when hashing ends,
@@ -77,9 +90,10 @@ impl PasswordHasher for Argon2PasswordHasher {
         })
         .await
         .context("password hashing task failed")?
+        .map_err(PasswordHasherError::from)
     }
 
-    async fn verify(&self, password: &str, hash: &str) -> Result<bool, anyhow::Error> {
+    async fn verify(&self, password: &str, hash: &str) -> Result<bool, PasswordHasherError> {
         let password = password.to_string();
         let hash = hash.to_string();
         let permit = self.acquire().await?;
@@ -89,6 +103,7 @@ impl PasswordHasher for Argon2PasswordHasher {
         })
         .await
         .context("password verification task failed")?
+        .map_err(PasswordHasherError::from)
     }
 }
 
@@ -108,8 +123,12 @@ mod tests {
     async fn returns_busy_when_no_slot_frees_up_in_time() {
         let hasher = Argon2PasswordHasher::with_limits(0, Duration::from_millis(10));
         let err = hasher.hash("pw".to_string()).await.unwrap_err();
-        assert!(err.is::<HasherBusy>());
+        assert!(
+            matches!(err, PasswordHasherError::Busy { retry_after } if retry_after == Duration::from_millis(10))
+        );
         let err = hasher.verify("pw", "irrelevant").await.unwrap_err();
-        assert!(err.is::<HasherBusy>());
+        assert!(
+            matches!(err, PasswordHasherError::Busy { retry_after } if retry_after == Duration::from_millis(10))
+        );
     }
 }

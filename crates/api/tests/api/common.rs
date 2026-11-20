@@ -353,6 +353,7 @@ impl TestApp {
                 require_ssl: false,
                 max_connections: 5,
             },
+            password_hasher: Default::default(),
         };
 
         let hasher = Arc::new(hasher);
