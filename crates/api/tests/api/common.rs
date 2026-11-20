@@ -324,6 +324,14 @@ impl TestApp {
     }
 
     pub fn new_with_db_health(db_healthy: bool) -> Self {
+        Self::build(db_healthy, Argon2PasswordHasher::new())
+    }
+
+    pub fn new_with_hasher(hasher: Argon2PasswordHasher) -> Self {
+        Self::build(true, hasher)
+    }
+
+    fn build(db_healthy: bool, hasher: Argon2PasswordHasher) -> Self {
         let user_repo = Arc::new(InMemoryUserRepository::new());
         let db = Database::mock(db_healthy);
 
@@ -347,7 +355,7 @@ impl TestApp {
             },
         };
 
-        let hasher = Arc::new(Argon2PasswordHasher::new());
+        let hasher = Arc::new(hasher);
         let user_service = Arc::new(UserService::new(user_repo.clone(), hasher));
         let board_service = Arc::new(BoardService::new(Arc::new(InMemoryBoardRepository::new())));
         let state = AppState::new_test(config, db, user_service, board_service);

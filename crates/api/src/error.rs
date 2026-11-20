@@ -1,6 +1,10 @@
 use std::collections::HashMap;
 
-use axum::{Json, http::StatusCode, response::IntoResponse};
+use axum::{
+    Json,
+    http::{StatusCode, header},
+    response::IntoResponse,
+};
 
 #[derive(Debug, thiserror::Error)]
 pub enum AppError {
@@ -24,6 +28,9 @@ pub enum AppError {
 
     #[error("{0}")]
     Conflict(String),
+
+    #[error("service is busy, retry later")]
+    ServiceUnavailable,
 
     #[error(transparent)]
     Internal(#[from] anyhow::Error),
@@ -56,6 +63,7 @@ impl From<domain::users::errors::UserError> for AppError {
             domain::users::errors::UserError::NotFound => AppError::NotFound,
             domain::users::errors::UserError::InvalidCredentials => AppError::InvalidCredentials,
             domain::users::errors::UserError::InvalidEmail(msg) => AppError::Validation(msg),
+            domain::users::errors::UserError::Busy => AppError::ServiceUnavailable,
             domain::users::errors::UserError::Internal(e) => AppError::Internal(e),
         }
     }
@@ -82,6 +90,20 @@ impl IntoResponse for AppError {
             }
             AppError::Forbidden => (StatusCode::FORBIDDEN, "forbidden", self.to_string()),
             AppError::Conflict(msg) => (StatusCode::CONFLICT, "conflict", msg.clone()),
+            AppError::ServiceUnavailable => {
+                let body = serde_json::json!({
+                    "error": {
+                        "type": "service_unavailable",
+                        "message": self.to_string(),
+                    }
+                });
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    [(header::RETRY_AFTER, "1")],
+                    Json(body),
+                )
+                    .into_response();
+            }
             AppError::Internal(err) => {
                 tracing::error!(error = ?err, "internal server error");
                 (

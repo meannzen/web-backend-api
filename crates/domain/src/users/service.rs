@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::ports::password_hasher::PasswordHasher;
+use crate::ports::password_hasher::{HasherBusy, PasswordHasher};
 use crate::users::errors::UserError;
 use crate::users::model::{Email, NewUser, Role, User, UserCursor, UserId, UserListQuery};
 use crate::users::port::UserRepository;
@@ -24,11 +24,7 @@ impl UserService {
         role: Role,
     ) -> Result<User, UserError> {
         let email = Email::parse(email).map_err(UserError::InvalidEmail)?;
-        let password_hash = self
-            .hasher
-            .hash(password)
-            .await
-            .map_err(UserError::Internal)?;
+        let password_hash = self.hasher.hash(password).await.map_err(hasher_error)?;
         self.repo
             .create(NewUser {
                 email,
@@ -55,7 +51,7 @@ impl UserService {
                     .hasher
                     .verify(&password, user.password_hash())
                     .await
-                    .map_err(UserError::Internal)?;
+                    .map_err(hasher_error)?;
                 if valid {
                     Ok(user)
                 } else {
@@ -63,8 +59,13 @@ impl UserService {
                 }
             }
             Err(UserError::NotFound) => {
-                // Discard the result; we only care about the time spent.
-                let _ = self.hasher.verify(&password, DUMMY_HASH).await;
+                // Discard the result; we only care about the time spent. Busy still has
+                // to surface, otherwise unknown emails would get 401 where known ones get 503.
+                if let Err(e) = self.hasher.verify(&password, DUMMY_HASH).await
+                    && e.is::<HasherBusy>()
+                {
+                    return Err(UserError::Busy);
+                }
                 Err(UserError::InvalidCredentials)
             }
             Err(other) => Err(other),
@@ -82,5 +83,13 @@ impl UserService {
         limit: u32,
     ) -> Result<(Vec<User>, bool), UserError> {
         self.repo.list(query, after, limit).await
+    }
+}
+
+fn hasher_error(e: anyhow::Error) -> UserError {
+    if e.is::<HasherBusy>() {
+        UserError::Busy
+    } else {
+        UserError::Internal(e)
     }
 }

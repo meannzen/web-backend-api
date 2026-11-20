@@ -1,4 +1,7 @@
-use axum::http::StatusCode;
+use std::time::Duration;
+
+use axum::http::{StatusCode, header};
+use infra::security::password_hasher::Argon2PasswordHasher;
 use serde_json::json;
 
 use crate::common::{TestApp, body_json};
@@ -286,4 +289,40 @@ async fn register_then_login_returns_valid_jwt() {
     // role:user so they are forbidden from admin-only routes (403, not 401).
     let response = app.get_with_token("/api/v1/users", token).await;
     assert_eq!(response.status(), StatusCode::FORBIDDEN);
+}
+
+// --- hasher at capacity ---
+
+fn busy_app() -> TestApp {
+    // Zero slots: every hash/verify times out waiting for a permit.
+    TestApp::new_with_hasher(Argon2PasswordHasher::with_limits(
+        0,
+        Duration::from_millis(10),
+    ))
+}
+
+#[tokio::test]
+async fn register_returns_503_when_hasher_busy() {
+    let app = busy_app();
+
+    let response = app.post_public(REGISTER_URL, &valid_register()).await;
+    assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+    assert_eq!(response.headers()[header::RETRY_AFTER], "1");
+
+    let body = body_json(response).await;
+    assert_eq!(body["error"]["type"], "service_unavailable");
+}
+
+#[tokio::test]
+async fn login_unknown_email_returns_503_not_401_when_hasher_busy() {
+    // A 401 here while known emails get 503 would let callers enumerate accounts.
+    let app = busy_app();
+
+    let response = app
+        .post_public(
+            LOGIN_URL,
+            &json!({ "email": "nobody@example.com", "password": "secret123" }),
+        )
+        .await;
+    assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
 }

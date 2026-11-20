@@ -36,3 +36,8 @@ secrecy.workspace = true
 http-body-util.workspace = true
 serde_json.workspace = true
 async-trait.workspace = true
+criterion.workspace = true
+
+[[bench]]
+name = "cursor"
+harness = false

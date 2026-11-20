@@ -105,6 +105,7 @@ pub async fn list_users(
         (status = 401, description = "Missing or invalid token", body = ErrorResponse),
         (status = 403, description = "Admin role required", body = ErrorResponse),
         (status = 409, description = "Email already taken", body = ErrorResponse),
+        (status = 503, description = "Password hasher at capacity, retry later", body = ErrorResponse),
     )
 )]
 #[tracing::instrument(skip(user_service, req))]

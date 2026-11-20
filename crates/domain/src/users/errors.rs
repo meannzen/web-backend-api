@@ -10,6 +10,8 @@ pub enum UserError {
     InvalidCredentials,
     #[error("invalid email: {0}")]
     InvalidEmail(String),
+    #[error("service is busy, retry later")]
+    Busy,
     #[error(transparent)]
     Internal(#[from] anyhow::Error),
 }
