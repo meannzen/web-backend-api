@@ -29,6 +29,24 @@ pub enum AppError {
     Internal(#[from] anyhow::Error),
 }
 
+impl From<domain::boards::errors::BoardError> for AppError {
+    fn from(e: domain::boards::errors::BoardError) -> Self {
+        match e {
+            domain::boards::errors::BoardError::CodeTaken => {
+                AppError::Conflict("board code already taken".to_string())
+            }
+            domain::boards::errors::BoardError::NotFound => AppError::NotFound,
+            domain::boards::errors::BoardError::InvalidName(msg) => {
+                AppError::Validation(format!("invalid board name: {msg}"))
+            }
+            domain::boards::errors::BoardError::InvalidCode(msg) => {
+                AppError::Validation(format!("invalid board code: {msg}"))
+            }
+            domain::boards::errors::BoardError::Internal(e) => AppError::Internal(e),
+        }
+    }
+}
+
 impl From<domain::users::errors::UserError> for AppError {
     fn from(e: domain::users::errors::UserError) -> Self {
         match e {

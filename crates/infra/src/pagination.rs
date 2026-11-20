@@ -10,14 +10,33 @@ pub fn push_ilike_filter(
     value: &str,
     has_where: &mut bool,
 ) {
-    qb.push(if *has_where { " AND " } else { " WHERE " });
-    qb.push(column);
-    qb.push(" ILIKE ");
+    push_ilike_any_filter(qb, &[column], value, has_where);
+}
+
+/// Like [`push_ilike_filter`], but matches if any of `columns` contains the term:
+/// `WHERE`/`AND (<c1> ILIKE $n OR <c2> ILIKE $m ...)`.
+pub fn push_ilike_any_filter(
+    qb: &mut QueryBuilder<Postgres>,
+    columns: &[&str],
+    value: &str,
+    has_where: &mut bool,
+) {
     let escaped = value
         .replace('\\', "\\\\")
         .replace('%', "\\%")
         .replace('_', "\\_");
-    qb.push_bind(format!("%{}%", escaped));
+    let pattern = format!("%{}%", escaped);
+
+    qb.push(if *has_where { " AND (" } else { " WHERE (" });
+    for (i, column) in columns.iter().enumerate() {
+        if i > 0 {
+            qb.push(" OR ");
+        }
+        qb.push(*column);
+        qb.push(" ILIKE ");
+        qb.push_bind(pattern.clone());
+    }
+    qb.push(")");
     *has_where = true;
 }
 

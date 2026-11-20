@@ -8,6 +8,10 @@ use axum::body::Body;
 use axum::extract::ConnectInfo;
 use axum::http::{Request, Response, header};
 use chrono::Utc;
+use domain::boards::errors::BoardError;
+use domain::boards::model::{Board, BoardCursor, BoardId, BoardListQuery, NewBoard};
+use domain::boards::port::BoardRepository;
+use domain::boards::service::BoardService;
 use domain::pagination::{CursorValue, SortDirection};
 use domain::users::errors::UserError;
 use domain::users::model::{Email, NewUser, SortField, User, UserCursor, UserId, UserListQuery};
@@ -257,6 +261,58 @@ impl UserRepository for InMemoryUserRepository {
     }
 }
 
+/// Minimal in-memory board store: newest first, no cursor support.
+pub struct InMemoryBoardRepository {
+    boards: Mutex<Vec<Board>>,
+}
+
+impl InMemoryBoardRepository {
+    pub fn new() -> Self {
+        Self {
+            boards: Mutex::new(Vec::new()),
+        }
+    }
+}
+
+#[async_trait]
+impl BoardRepository for InMemoryBoardRepository {
+    async fn create(&self, new_board: NewBoard) -> Result<Board, BoardError> {
+        let mut boards = self.boards.lock().unwrap();
+        if boards
+            .iter()
+            .any(|b| b.code().as_ref() == new_board.code.as_ref())
+        {
+            return Err(BoardError::CodeTaken);
+        }
+
+        let now = Utc::now();
+        let board = Board::new(BoardId::new(), new_board, now, now);
+        boards.push(board.clone());
+        Ok(board)
+    }
+
+    async fn find_by_id(&self, id: &BoardId) -> Result<Board, BoardError> {
+        let boards = self.boards.lock().unwrap();
+        boards
+            .iter()
+            .find(|b| b.id().as_uuid() == id.as_uuid())
+            .cloned()
+            .ok_or(BoardError::NotFound)
+    }
+
+    async fn list(
+        &self,
+        _query: &BoardListQuery,
+        _after: Option<BoardCursor>,
+        limit: u32,
+    ) -> Result<(Vec<Board>, bool), BoardError> {
+        let mut page: Vec<Board> = self.boards.lock().unwrap().iter().rev().cloned().collect();
+        let has_next_page = page.len() > limit as usize;
+        page.truncate(limit as usize);
+        Ok((page, has_next_page))
+    }
+}
+
 pub struct TestApp {
     router: axum::Router,
     pub user_repo: Arc<InMemoryUserRepository>,
@@ -293,7 +349,8 @@ impl TestApp {
 
         let hasher = Arc::new(Argon2PasswordHasher::new());
         let user_service = Arc::new(UserService::new(user_repo.clone(), hasher));
-        let state = AppState::new_test(config, db, user_service);
+        let board_service = Arc::new(BoardService::new(Arc::new(InMemoryBoardRepository::new())));
+        let state = AppState::new_test(config, db, user_service, board_service);
 
         TestApp {
             router: router(state),

@@ -218,7 +218,8 @@ fn query_param_hint(key: &str) -> Option<&'static str> {
         }
         "role" => Some("expected one of: teacher, admin, principal, hr"),
         "limit" => Some("expected a non-negative integer"),
-        "sort_by" => Some("expected one of: created_at, email"),
+        // sort_by has no hint: the valid fields differ per resource, and serde's
+        // "unknown variant" error already lists them.
         "sort_direction" => Some("expected one of: asc, desc"),
         _ => None,
     }
