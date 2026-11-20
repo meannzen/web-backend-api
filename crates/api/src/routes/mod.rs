@@ -51,6 +51,7 @@ use shared::config::Environment;
         crate::dtos::user::UserResponse,
         crate::dtos::common::CursorPaginationMeta,
         crate::dtos::common::ApiSortField,
+        crate::dtos::user::ApiRole,
         crate::dtos::common::ApiSortDirection,
         crate::dtos::common::ErrorResponse,
         crate::dtos::common::ErrorDetail,

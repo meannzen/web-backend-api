@@ -400,3 +400,118 @@ async fn get_user_returns_500_on_internal_error() {
     let body = body_json(response).await;
     assert_eq!(body["error"]["type"], "internal_error");
 }
+
+// --- role / created_at filters ---
+
+async fn seed_two_users(app: &TestApp) {
+    for (e, n) in [("a@example.com", "A"), ("b@example.com", "B")] {
+        app.post_as_admin(
+            "/api/v1/users",
+            &json!({ "email": e, "password": "secret123", "first_name": n, "last_name": n }),
+        )
+        .await;
+    }
+}
+
+async fn list_len(app: &TestApp, qs: &str) -> usize {
+    let response = app.get_as_admin(&format!("/api/v1/users?{qs}")).await;
+    assert_eq!(response.status(), StatusCode::OK);
+    body_json(response).await["data"].as_array().unwrap().len()
+}
+
+#[tokio::test]
+async fn list_users_filters_by_role() {
+    let app = TestApp::new();
+    seed_two_users(&app).await;
+
+    assert_eq!(list_len(&app, "role=teacher").await, 2);
+    assert_eq!(list_len(&app, "role=hr").await, 0);
+}
+
+#[tokio::test]
+async fn list_users_invalid_role_returns_400() {
+    let app = TestApp::new();
+    let response = app.get_as_admin("/api/v1/users?role=wizard").await;
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn list_users_filters_by_created_at_range() {
+    let app = TestApp::new();
+    seed_two_users(&app).await;
+
+    assert_eq!(
+        list_len(&app, "created_at_gt=2000-01-01T00:00:00Z").await,
+        2
+    );
+    assert_eq!(
+        list_len(&app, "created_at_gt=2999-01-01T00:00:00Z").await,
+        0
+    );
+    assert_eq!(
+        list_len(&app, "created_at_lt=2999-01-01T00:00:00Z").await,
+        2
+    );
+    assert_eq!(
+        list_len(&app, "created_at_lt=2000-01-01T00:00:00Z").await,
+        0
+    );
+    assert_eq!(
+        list_len(&app, "created_at_eq=2000-01-01T00:00:00Z").await,
+        0
+    );
+}
+
+#[tokio::test]
+async fn list_users_invalid_created_at_returns_400() {
+    let app = TestApp::new();
+    let response = app
+        .get_as_admin("/api/v1/users?created_at_gt=yesterday")
+        .await;
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn list_users_query_error_names_field_and_value() {
+    let app = TestApp::new();
+
+    for (qs, field, value) in [
+        (
+            "role=teacher&created_at_eq=2026-11-20T04",
+            "created_at_eq",
+            "2026-11-20T04",
+        ),
+        ("role=wizard", "role", "wizard"),
+        ("limit=abc", "limit", "abc"),
+    ] {
+        let response = app.get_as_admin(&format!("/api/v1/users?{qs}")).await;
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let body = body_json(response).await;
+        let msg = body["error"]["message"].as_str().unwrap();
+        assert!(
+            msg.contains(&format!("`{field}`")) && msg.contains(value),
+            "message should name field and value: {msg}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn list_users_query_error_includes_hint_and_truncates_value() {
+    let app = TestApp::new();
+
+    let response = app
+        .get_as_admin("/api/v1/users?created_at_gt=2026-11-20T04")
+        .await;
+    let body = body_json(response).await;
+    let msg = body["error"]["message"].as_str().unwrap();
+    assert!(msg.contains("RFC 3339"), "{msg}");
+
+    let long = "x".repeat(500);
+    let response = app
+        .get_as_admin(&format!("/api/v1/users?role={long}"))
+        .await;
+    let body = body_json(response).await;
+    let msg = body["error"]["message"].as_str().unwrap();
+    assert!(msg.len() < 300, "value should be truncated: {msg}");
+    assert!(msg.contains("..."), "{msg}");
+}

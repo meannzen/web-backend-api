@@ -69,6 +69,7 @@ dependencies = [
  "secrecy",
  "serde",
  "serde_json",
+ "serde_urlencoded",
  "shared",
  "sqlx",
  "thiserror 2.0.18",

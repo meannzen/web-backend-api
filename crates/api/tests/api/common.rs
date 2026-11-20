@@ -167,15 +167,19 @@ impl UserRepository for InMemoryUserRepository {
         let sorted = users.clone();
 
         // Apply search filter
-        let filtered: Vec<User> = if let Some(ref search) = query.filter.search {
-            let lower = search.to_lowercase();
-            sorted
-                .into_iter()
-                .filter(|u| u.email().as_ref().contains(&lower))
-                .collect()
-        } else {
-            sorted
-        };
+        let f = &query.filter;
+        let filtered: Vec<User> = sorted
+            .into_iter()
+            .filter(|u| {
+                f.search
+                    .as_ref()
+                    .is_none_or(|s| u.email().as_ref().contains(&s.to_lowercase()))
+                    && f.role.as_ref().is_none_or(|r| u.role() == r)
+                    && f.created_at_gt.is_none_or(|t| u.created_at() > t)
+                    && f.created_at_eq.is_none_or(|t| u.created_at() == t)
+                    && f.created_at_lt.is_none_or(|t| u.created_at() < t)
+            })
+            .collect();
 
         // Sort according to query
         let mut sorted = filtered;
