@@ -19,6 +19,7 @@ use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
 use crate::handlers::auth::{login, register};
+use crate::handlers::boards::{create_board, get_board, list_boards};
 use crate::handlers::health::{health_live, health_ready};
 use crate::handlers::users::{create_user, get_user, list_users};
 use crate::middleware::{auth::auth_middleware, cors::cors_layer, timing::timing_middleware};
@@ -42,6 +43,9 @@ use shared::config::Environment;
         crate::handlers::users::list_users,
         crate::handlers::users::create_user,
         crate::handlers::users::get_user,
+        crate::handlers::boards::list_boards,
+        crate::handlers::boards::create_board,
+        crate::handlers::boards::get_board,
     ),
     components(schemas(
         crate::dtos::auth::RegisterRequest,
@@ -52,6 +56,9 @@ use shared::config::Environment;
         crate::dtos::common::CursorPaginationMeta,
         crate::dtos::common::ApiSortField,
         crate::dtos::user::ApiRole,
+        crate::dtos::board::CreateBoardRequest,
+        crate::dtos::board::BoardResponse,
+        crate::dtos::board::ApiBoardSortField,
         crate::dtos::common::ApiSortDirection,
         crate::dtos::common::ErrorResponse,
         crate::dtos::common::ErrorDetail,
@@ -60,6 +67,7 @@ use shared::config::Environment;
         (name = "Health", description = "Liveness and readiness probes"),
         (name = "Auth", description = "Registration and login"),
         (name = "Users", description = "User management"),
+        (name = "Boards", description = "School board management"),
     ),
     servers(
         (url = "/", description = "Current server"),
@@ -182,11 +190,19 @@ fn protected_routes(state: AppState) -> Router<AppState> {
 }
 
 fn v1_routes() -> Router<AppState> {
-    Router::new().nest("/users", user_routes())
+    Router::new()
+        .nest("/users", user_routes())
+        .nest("/boards", board_routes())
 }
 
 fn user_routes() -> Router<AppState> {
     Router::new()
         .route("/", get(list_users).post(create_user))
         .route("/{id}", get(get_user))
+}
+
+fn board_routes() -> Router<AppState> {
+    Router::new()
+        .route("/", get(list_boards).post(create_board))
+        .route("/{id}", get(get_board))
 }
