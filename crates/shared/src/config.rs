@@ -160,6 +160,11 @@ impl Config {
             .try_deserialize()
             .context("failed to deserialize configuration")?;
 
+        anyhow::ensure!(
+            config.password_hasher.max_concurrent != Some(0),
+            "PASSWORD_HASHER__MAX_CONCURRENT must be at least 1 (unset it to use one per CPU)"
+        );
+
         Ok(config)
     }
 }
