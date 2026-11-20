@@ -175,8 +175,13 @@ impl pagination::SortField for SortField {
     }
 }
 
+#[derive(Debug, Clone, Default)]
 pub struct UserFilter {
     pub search: Option<String>,
+    pub role: Option<Role>,
+    pub created_at_gt: Option<DateTime<Utc>>,
+    pub created_at_eq: Option<DateTime<Utc>>,
+    pub created_at_lt: Option<DateTime<Utc>>,
 }
 
 pub type UserListQuery = pagination::ListQuery<UserFilter, SortField>;

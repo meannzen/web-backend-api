@@ -21,6 +21,34 @@ pub fn push_ilike_filter(
     *has_where = true;
 }
 
+/// Pushes `WHERE`/`AND <column> = $n` for a text value.
+pub fn push_eq_filter(
+    qb: &mut QueryBuilder<Postgres>,
+    column: &str,
+    value: String,
+    has_where: &mut bool,
+) {
+    qb.push(if *has_where { " AND " } else { " WHERE " });
+    qb.push(column);
+    qb.push(" = ");
+    qb.push_bind(value);
+    *has_where = true;
+}
+
+/// Pushes `WHERE`/`AND <column> <op> $n` for a timestamp. `op` must be a trusted literal.
+pub fn push_cmp_filter(
+    qb: &mut QueryBuilder<Postgres>,
+    column: &str,
+    op: &str,
+    value: chrono::DateTime<chrono::Utc>,
+    has_where: &mut bool,
+) {
+    qb.push(if *has_where { " AND " } else { " WHERE " });
+    qb.push(format!("{column} {op} "));
+    qb.push_bind(value);
+    *has_where = true;
+}
+
 /// Pushes the `(col, id) op (val, id)` keyset condition for cursor-based pagination.
 pub fn push_cursor_condition(
     qb: &mut QueryBuilder<Postgres>,

@@ -137,6 +137,24 @@ impl UserRepository for PgUserRepository {
             pagination::push_ilike_filter(&mut query_builder, "email", search, &mut has_where);
         }
 
+        if let Some(ref role) = query.filter.role {
+            pagination::push_eq_filter(
+                &mut query_builder,
+                "role",
+                role.as_str().to_string(),
+                &mut has_where,
+            );
+        }
+        if let Some(ts) = query.filter.created_at_gt {
+            pagination::push_cmp_filter(&mut query_builder, "created_at", ">", ts, &mut has_where);
+        }
+        if let Some(ts) = query.filter.created_at_eq {
+            pagination::push_cmp_filter(&mut query_builder, "created_at", "=", ts, &mut has_where);
+        }
+        if let Some(ts) = query.filter.created_at_lt {
+            pagination::push_cmp_filter(&mut query_builder, "created_at", "<", ts, &mut has_where);
+        }
+
         pagination::push_cursor_condition(
             &mut query_builder,
             col,

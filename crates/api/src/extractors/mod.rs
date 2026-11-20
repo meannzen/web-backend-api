@@ -154,12 +154,12 @@ where
 {
     type Rejection = AppError;
 
-    async fn from_request_parts(parts: &mut Parts, state: &T) -> Result<Self, Self::Rejection> {
-        let axum::extract::Query(params) = axum::extract::Query::<
+    async fn from_request_parts(parts: &mut Parts, _state: &T) -> Result<Self, Self::Rejection> {
+        let query = parts.uri.query().unwrap_or_default();
+        let params = serde_urlencoded::from_str::<
             crate::dtos::common::CursorPaginationParams<F, S, D>,
-        >::from_request_parts(parts, state)
-        .await
-        .map_err(|e| AppError::Validation(e.to_string()))?;
+        >(query)
+        .map_err(|e| AppError::Validation(describe_query_error::<F, S, D>(query, &e)))?;
 
         Ok(Pagination {
             limit: params.limit.clamp(1, 100),
@@ -168,5 +168,58 @@ where
             sort_by: params.sort_by,
             sort_direction: params.sort_direction,
         })
+    }
+}
+
+/// serde's `flatten` drops field names from errors, so find the offending
+/// parameter by re-parsing each `key=value` pair on its own (all fields are
+/// optional/defaulted, so a single valid pair always parses).
+fn describe_query_error<F, S, D>(query: &str, original: &serde_urlencoded::de::Error) -> String
+where
+    F: DeserializeOwned,
+    S: DeserializeOwned + Default,
+    D: DeserializeOwned + Default,
+{
+    let pairs = serde_urlencoded::from_str::<Vec<(String, String)>>(query).unwrap_or_default();
+    for (key, value) in pairs {
+        let Ok(single) = serde_urlencoded::to_string([(&key, &value)]) else {
+            continue;
+        };
+        if let Err(e) = serde_urlencoded::from_str::<
+            crate::dtos::common::CursorPaginationParams<F, S, D>,
+        >(&single)
+        {
+            let reason = query_param_hint(&key).map_or_else(|| e.to_string(), str::to_string);
+            return format!(
+                "invalid query parameter `{key}` (value `{}`): {reason}",
+                truncate(&value, MAX_ECHOED_VALUE_LEN)
+            );
+        }
+    }
+    format!("invalid query string: {original}")
+}
+
+const MAX_ECHOED_VALUE_LEN: usize = 100;
+
+fn truncate(value: &str, max_chars: usize) -> String {
+    if value.chars().count() <= max_chars {
+        value.to_string()
+    } else {
+        let head: String = value.chars().take(max_chars).collect();
+        format!("{head}...")
+    }
+}
+
+/// Client-facing explanation of the expected format for known query parameters.
+fn query_param_hint(key: &str) -> Option<&'static str> {
+    match key {
+        "created_at_gt" | "created_at_eq" | "created_at_lt" => {
+            Some("expected an RFC 3339 timestamp, e.g. 2026-11-20T04:00:00Z")
+        }
+        "role" => Some("expected one of: teacher, admin, principal, hr"),
+        "limit" => Some("expected a non-negative integer"),
+        "sort_by" => Some("expected one of: created_at, email"),
+        "sort_direction" => Some("expected one of: asc, desc"),
+        _ => None,
     }
 }

@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use domain::users::model::SortField;
+use domain::users::model::{Role, SortField};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
@@ -57,13 +57,43 @@ impl CursorSource<SortField> for UserResponse {
     }
 }
 
+#[derive(Debug, Deserialize, Clone, Copy, ToSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum ApiRole {
+    Teacher,
+    Admin,
+    Principal,
+    Hr,
+}
+
+impl From<ApiRole> for Role {
+    fn from(r: ApiRole) -> Self {
+        match r {
+            ApiRole::Teacher => Role::Teacher,
+            ApiRole::Admin => Role::Admin,
+            ApiRole::Principal => Role::Principal,
+            ApiRole::Hr => Role::Hr,
+        }
+    }
+}
+
 #[derive(Debug, Deserialize, Default, ToSchema)]
 pub struct UserFilterParams {
     pub search: Option<String>,
+    pub role: Option<ApiRole>,
+    pub created_at_gt: Option<DateTime<Utc>>,
+    pub created_at_eq: Option<DateTime<Utc>>,
+    pub created_at_lt: Option<DateTime<Utc>>,
 }
 
 impl From<UserFilterParams> for domain::users::model::UserFilter {
     fn from(f: UserFilterParams) -> Self {
-        domain::users::model::UserFilter { search: f.search }
+        domain::users::model::UserFilter {
+            search: f.search,
+            role: f.role.map(Role::from),
+            created_at_gt: f.created_at_gt,
+            created_at_eq: f.created_at_eq,
+            created_at_lt: f.created_at_lt,
+        }
     }
 }

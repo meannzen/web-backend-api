@@ -14,7 +14,7 @@ use crate::cursor;
 use crate::dtos::common::{
     ApiSortDirection, ApiSortField, CursorPaginatedResponse, CursorPaginationMeta, ErrorResponse,
 };
-use crate::dtos::user::{CreateUserRequest, UserFilterParams, UserResponse};
+use crate::dtos::user::{ApiRole, CreateUserRequest, UserFilterParams, UserResponse};
 use crate::error::AppError;
 use crate::extractors::{Pagination, RequireAdmin, ValidatedJson};
 
@@ -27,6 +27,10 @@ use crate::extractors::{Pagination, RequireAdmin, ValidatedJson};
         ("limit" = Option<u32>, Query, description = "Items per page (default: 20, max: 100)"),
         ("after" = Option<String>, Query, description = "Opaque cursor from previous page's next_cursor"),
         ("search" = Option<String>, Query, description = "Filter by email (substring match)"),
+        ("role" = Option<ApiRole>, Query, description = "Filter by role: teacher, admin, principal or hr"),
+        ("created_at_gt" = Option<String>, Query, description = "Created after (RFC 3339, exclusive)"),
+        ("created_at_eq" = Option<String>, Query, description = "Created at exactly (RFC 3339)"),
+        ("created_at_lt" = Option<String>, Query, description = "Created before (RFC 3339, exclusive)"),
         ("sort_by" = Option<ApiSortField>, Query, description = "Sort field: created_at (default) or email"),
         ("sort_direction" = Option<ApiSortDirection>, Query, description = "Sort direction: desc (default) or asc"),
     ),
