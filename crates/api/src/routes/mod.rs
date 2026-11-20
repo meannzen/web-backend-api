@@ -3,7 +3,10 @@ use std::time::Duration;
 
 use axum::extract::DefaultBodyLimit;
 use axum::http::StatusCode;
-use axum::{Router, middleware, routing::{get, post}};
+use axum::{
+    Router, middleware,
+    routing::{get, post},
+};
 use tower::ServiceBuilder;
 use tower_governor::{GovernorLayer, governor::GovernorConfigBuilder};
 use tower_http::{
@@ -126,30 +129,28 @@ pub fn router(state: AppState) -> Router {
             ServiceBuilder::new()
                 .layer(CompressionLayer::new())
                 .layer(SetRequestIdLayer::x_request_id(MakeRequestUuid))
-                .layer(
-                    TraceLayer::new_for_http().make_span_with(
-                        |request: &axum::http::Request<_>| {
-                            let request_id = request
-                                .headers()
-                                .get("x-request-id")
-                                .and_then(|v| v.to_str().ok())
-                                .unwrap_or("unknown");
+                .layer(TraceLayer::new_for_http().make_span_with(
+                    |request: &axum::http::Request<_>| {
+                        let request_id = request
+                            .headers()
+                            .get("x-request-id")
+                            .and_then(|v| v.to_str().ok())
+                            .unwrap_or("unknown");
 
-                            let matched_path = request
-                                .extensions()
-                                .get::<axum::extract::MatchedPath>()
-                                .map(|p| p.as_str().to_string())
-                                .unwrap_or_else(|| request.uri().path().to_string());
+                        let matched_path = request
+                            .extensions()
+                            .get::<axum::extract::MatchedPath>()
+                            .map(|p| p.as_str().to_string())
+                            .unwrap_or_else(|| request.uri().path().to_string());
 
-                            tracing::info_span!(
-                                "http_request",
-                                method = %request.method(),
-                                path = %matched_path,
-                                request_id = %request_id,
-                            )
-                        },
-                    ),
-                )
+                        tracing::info_span!(
+                            "http_request",
+                            method = %request.method(),
+                            path = %matched_path,
+                            request_id = %request_id,
+                        )
+                    },
+                ))
                 .layer(PropagateRequestIdLayer::x_request_id())
                 .layer(TimeoutLayer::with_status_code(
                     StatusCode::REQUEST_TIMEOUT,

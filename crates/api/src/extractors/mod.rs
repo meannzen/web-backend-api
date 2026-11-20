@@ -69,7 +69,11 @@ where
 
         // Fall back: decode from the Authorization header directly
         let config = Arc::<Config>::from_ref(state);
-        let secret = config.application.jwt_secret.as_ref().ok_or(AppError::Unauthorized)?;
+        let secret = config
+            .application
+            .jwt_secret
+            .as_ref()
+            .ok_or(AppError::Unauthorized)?;
 
         let token = parts
             .headers
@@ -86,7 +90,11 @@ where
         .map_err(|_| AppError::Unauthorized)?;
 
         let claims = token_data.claims;
-        Ok(AuthUser { user_id: claims.sub, email: claims.email, role: claims.role })
+        Ok(AuthUser {
+            user_id: claims.sub,
+            email: claims.email,
+            role: claims.role,
+        })
     }
 }
 
@@ -128,7 +136,8 @@ where
     }
 }
 
-pub struct Pagination<F = crate::dtos::common::EmptyFilter, S = ApiSortField, D = ApiSortDirection> {
+pub struct Pagination<F = crate::dtos::common::EmptyFilter, S = ApiSortField, D = ApiSortDirection>
+{
     pub limit: u32,
     pub after: Option<String>,
     pub filter: F,

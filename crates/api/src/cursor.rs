@@ -26,7 +26,8 @@ fn decode_raw(s: &str, expected_sort: &str, expected_dir: &str) -> Result<RawCur
     if parts.len() != 4 {
         return Err(invalid_cursor());
     }
-    let (cursor_sort, cursor_dir, cursor_value, cursor_id) = (parts[0], parts[1], parts[2], parts[3]);
+    let (cursor_sort, cursor_dir, cursor_value, cursor_id) =
+        (parts[0], parts[1], parts[2], parts[3]);
 
     if cursor_sort != expected_sort || cursor_dir != expected_dir {
         return Err(AppError::Validation(
@@ -47,7 +48,11 @@ pub trait CursorSource<S> {
     fn cursor_id(&self) -> String;
 }
 
-pub fn encode<S: SortField, T: CursorSource<S>>(item: &T, sort_by: S, direction: SortDirection) -> String {
+pub fn encode<S: SortField, T: CursorSource<S>>(
+    item: &T,
+    sort_by: S,
+    direction: SortDirection,
+) -> String {
     let raw = format!(
         "{}|{}|{}|{}",
         sort_by.column(),

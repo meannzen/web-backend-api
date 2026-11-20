@@ -30,7 +30,7 @@ async fn register_creates_user_in_db(pool: PgPool) {
     assert_eq!(body["email"], "alice@example.com");
     assert_eq!(body["first_name"], "Alice");
     assert_eq!(body["last_name"], "Smith");
-    assert_eq!(body["role"], "user");
+    assert_eq!(body["role"], "teacher");
     assert!(Uuid::parse_str(body["id"].as_str().unwrap()).is_ok());
 }
 
@@ -62,9 +62,9 @@ async fn login_after_register_returns_valid_token(pool: PgPool) {
     let token = body["token"].as_str().unwrap();
 
     // Token should decode to the registered user's UUID
-    use jsonwebtoken::{DecodingKey, decode};
     use crate::common::TEST_JWT_SECRET;
     use api::middleware::auth::{Claims, make_validation};
+    use jsonwebtoken::{DecodingKey, decode};
 
     let token_data = decode::<Claims>(
         token,
@@ -76,7 +76,7 @@ async fn login_after_register_returns_valid_token(pool: PgPool) {
     // The sub should be a valid UUID matching the registered user
     assert!(!token_data.claims.sub.is_nil());
     assert_eq!(token_data.claims.email, "bob@example.com");
-    assert_eq!(token_data.claims.role, domain::users::model::Role::User);
+    assert_eq!(token_data.claims.role, domain::users::model::Role::Teacher);
 }
 
 #[sqlx::test(migrations = "../../migrations")]

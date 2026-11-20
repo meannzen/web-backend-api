@@ -6,7 +6,7 @@ CREATE TABLE users (
     password_hash TEXT NOT NULL,
     first_name    TEXT NOT NULL DEFAULT '',
     last_name     TEXT NOT NULL DEFAULT '',
-    role          TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('user', 'admin')),
+    role          TEXT NOT NULL DEFAULT 'teacher' REFERENCES roles (name),
     created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

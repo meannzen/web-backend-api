@@ -76,20 +76,31 @@ impl TestApp {
         };
         let db = Database::from_pool(pool);
         let state = AppState::new(config, db);
-        TestApp { router: router(state) }
+        TestApp {
+            router: router(state),
+        }
     }
 
     async fn inject_and_send(&self, req: Request<Body>) -> Response<Body> {
         let (mut parts, body) = req.into_parts();
-        parts.extensions.insert(ConnectInfo(SocketAddr::from(([127, 0, 0, 1], 0))));
-        self.router.clone().oneshot(Request::from_parts(parts, body)).await.unwrap()
+        parts
+            .extensions
+            .insert(ConnectInfo(SocketAddr::from(([127, 0, 0, 1], 0))));
+        self.router
+            .clone()
+            .oneshot(Request::from_parts(parts, body))
+            .await
+            .unwrap()
     }
 
     pub async fn get_as_admin(&self, uri: &str) -> Response<Body> {
         self.inject_and_send(
             Request::builder()
                 .uri(uri)
-                .header(header::AUTHORIZATION, format!("Bearer {}", make_admin_token()))
+                .header(
+                    header::AUTHORIZATION,
+                    format!("Bearer {}", make_admin_token()),
+                )
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -102,7 +113,10 @@ impl TestApp {
                 .method("POST")
                 .uri(uri)
                 .header(header::CONTENT_TYPE, "application/json")
-                .header(header::AUTHORIZATION, format!("Bearer {}", make_admin_token()))
+                .header(
+                    header::AUTHORIZATION,
+                    format!("Bearer {}", make_admin_token()),
+                )
                 .body(Body::from(serde_json::to_vec(body).unwrap()))
                 .unwrap(),
         )
@@ -125,13 +139,8 @@ impl TestApp {
     /// GET without Authorization header.
     #[allow(dead_code)]
     pub async fn get_no_auth(&self, uri: &str) -> Response<Body> {
-        self.inject_and_send(
-            Request::builder()
-                .uri(uri)
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
+        self.inject_and_send(Request::builder().uri(uri).body(Body::empty()).unwrap())
+            .await
     }
 }
 

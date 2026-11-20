@@ -13,7 +13,10 @@ pub fn push_ilike_filter(
     qb.push(if *has_where { " AND " } else { " WHERE " });
     qb.push(column);
     qb.push(" ILIKE ");
-    let escaped = value.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_");
+    let escaped = value
+        .replace('\\', "\\\\")
+        .replace('%', "\\%")
+        .replace('_', "\\_");
     qb.push_bind(format!("%{}%", escaped));
     *has_where = true;
 }
@@ -44,7 +47,12 @@ pub fn push_cursor_condition(
     *has_where = true;
 }
 
-pub fn push_order_and_limit(qb: &mut QueryBuilder<Postgres>, col: &str, order: &str, fetch_limit: i64) {
+pub fn push_order_and_limit(
+    qb: &mut QueryBuilder<Postgres>,
+    col: &str,
+    order: &str,
+    fetch_limit: i64,
+) {
     qb.push(format!(" ORDER BY {col} {order}, id {order} "));
     qb.push(" LIMIT ");
     qb.push_bind(fetch_limit);

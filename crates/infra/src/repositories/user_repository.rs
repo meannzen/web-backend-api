@@ -1,8 +1,8 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use domain::users::errors::UserError;
 use domain::pagination::SortField as _;
-use domain::users::model::{Email, NewUser, Role, User, UserId, UserCursor, UserListQuery};
+use domain::users::errors::UserError;
+use domain::users::model::{Email, NewUser, Role, User, UserCursor, UserId, UserListQuery};
 use domain::users::port::UserRepository;
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -29,7 +29,13 @@ impl TryFrom<UserRow> for User {
         let role = row.role.parse::<Role>().map_err(|e| anyhow::anyhow!(e))?;
         Ok(User::new(
             UserId::from(row.id),
-            NewUser { email, password_hash: row.password_hash, first_name: row.first_name, last_name: row.last_name, role },
+            NewUser {
+                email,
+                password_hash: row.password_hash,
+                first_name: row.first_name,
+                last_name: row.last_name,
+                role,
+            },
             row.created_at,
             row.updated_at,
         ))
@@ -122,7 +128,7 @@ impl UserRepository for PgUserRepository {
         let op = query.direction.cursor_op();
 
         let mut query_builder: sqlx::QueryBuilder<sqlx::Postgres> = sqlx::QueryBuilder::new(
-            "SELECT id, email, password_hash, first_name, last_name, role, created_at, updated_at FROM users "
+            "SELECT id, email, password_hash, first_name, last_name, role, created_at, updated_at FROM users ",
         );
 
         let mut has_where = false;

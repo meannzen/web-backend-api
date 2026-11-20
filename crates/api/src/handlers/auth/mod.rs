@@ -3,9 +3,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use axum::{Json, extract::State, http::StatusCode};
 use domain::users::model::Role;
+use domain::users::service::UserService;
 use jsonwebtoken::{Algorithm, EncodingKey, Header, encode};
 use secrecy::ExposeSecret;
-use domain::users::service::UserService;
 
 use crate::AppResult;
 use crate::dtos::auth::{LoginRequest, RegisterRequest, TokenResponse};
@@ -32,7 +32,13 @@ pub async fn register(
     ValidatedJson(req): ValidatedJson<RegisterRequest>,
 ) -> AppResult<(StatusCode, Json<UserResponse>)> {
     let user = user_service
-        .create(&req.email, req.password, req.first_name, req.last_name, Role::User)
+        .create(
+            &req.email,
+            req.password,
+            req.first_name,
+            req.last_name,
+            Role::Teacher,
+        )
         .await?;
     Ok((StatusCode::CREATED, Json(UserResponse::from(user))))
 }
@@ -52,7 +58,10 @@ pub async fn login(
     State(state): State<AppState>,
     ValidatedJson(req): ValidatedJson<LoginRequest>,
 ) -> AppResult<Json<TokenResponse>> {
-    let user = state.user_service.authenticate(&req.email, req.password).await?;
+    let user = state
+        .user_service
+        .authenticate(&req.email, req.password)
+        .await?;
 
     let secret = state
         .config

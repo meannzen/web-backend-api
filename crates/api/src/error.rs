@@ -59,7 +59,9 @@ impl IntoResponse for AppError {
                 return (StatusCode::BAD_REQUEST, Json(body)).into_response();
             }
             AppError::Unauthorized => (StatusCode::UNAUTHORIZED, "unauthorized", self.to_string()),
-            AppError::InvalidCredentials => (StatusCode::UNAUTHORIZED, "unauthorized", self.to_string()),
+            AppError::InvalidCredentials => {
+                (StatusCode::UNAUTHORIZED, "unauthorized", self.to_string())
+            }
             AppError::Forbidden => (StatusCode::FORBIDDEN, "forbidden", self.to_string()),
             AppError::Conflict(msg) => (StatusCode::CONFLICT, "conflict", msg.clone()),
             AppError::Internal(err) => {
