@@ -28,6 +28,31 @@ impl Default for BoardId {
     }
 }
 
+/// Display name of a board. Trimmed; must be non-blank and at most `MAX_LEN` characters.
+#[derive(Debug, Clone)]
+pub struct BoardName(String);
+
+impl BoardName {
+    pub const MAX_LEN: usize = 200;
+
+    pub fn parse(s: &str) -> Result<Self, String> {
+        let s = s.trim();
+        if s.is_empty() {
+            return Err("must not be blank".to_string());
+        }
+        if s.chars().count() > Self::MAX_LEN {
+            return Err(format!("must be at most {} characters", Self::MAX_LEN));
+        }
+        Ok(BoardName(s.to_string()))
+    }
+}
+
+impl AsRef<str> for BoardName {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
+}
+
 /// Short identifier for a board (e.g. the Ministry board number or "TDSB").
 /// Stored uppercase; allowed characters are A-Z, 0-9, '-' and '_'.
 #[derive(Debug, Clone)]
@@ -37,7 +62,9 @@ impl BoardCode {
     pub const MAX_LEN: usize = 20;
 
     pub fn parse(s: &str) -> Result<Self, String> {
-        let s = s.trim().to_uppercase();
+        // Validate the raw input before uppercasing: Unicode case mapping can turn
+        // non-ASCII characters into ASCII ones (e.g. 'ß' -> "SS").
+        let s = s.trim();
         if s.is_empty() || s.len() > Self::MAX_LEN {
             return Err(format!(
                 "must be between 1 and {} characters",
@@ -46,11 +73,11 @@ impl BoardCode {
         }
         if !s
             .chars()
-            .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '-' || c == '_')
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
         {
             return Err("may only contain letters, digits, '-' and '_'".to_string());
         }
-        Ok(BoardCode(s))
+        Ok(BoardCode(s.to_ascii_uppercase()))
     }
 }
 
@@ -61,14 +88,14 @@ impl AsRef<str> for BoardCode {
 }
 
 pub struct NewBoard {
-    pub name: String,
+    pub name: BoardName,
     pub code: BoardCode,
 }
 
 #[derive(Debug, Clone)]
 pub struct Board {
     id: BoardId,
-    name: String,
+    name: BoardName,
     code: BoardCode,
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
@@ -94,7 +121,7 @@ impl Board {
         &self.id
     }
     pub fn name(&self) -> &str {
-        &self.name
+        self.name.as_ref()
     }
     pub fn code(&self) -> &BoardCode {
         &self.code
@@ -169,5 +196,26 @@ mod tests {
         assert!(BoardCode::parse("TD SB").is_err());
         assert!(BoardCode::parse("TDSB!").is_err());
         assert!(BoardCode::parse("ÉCOLE").is_err());
+        // Would uppercase to ASCII "STRASSE" / "FF" if checked after uppercasing.
+        assert!(BoardCode::parse("straße").is_err());
+        assert!(BoardCode::parse("ﬀ").is_err());
+    }
+
+    #[test]
+    fn board_name_is_trimmed() {
+        let name = BoardName::parse("  Toronto DSB ").unwrap();
+        assert_eq!(name.as_ref(), "Toronto DSB");
+    }
+
+    #[test]
+    fn board_name_rejects_blank() {
+        assert!(BoardName::parse("").is_err());
+        assert!(BoardName::parse("   ").is_err());
+    }
+
+    #[test]
+    fn board_name_length_counts_characters() {
+        assert!(BoardName::parse(&"é".repeat(BoardName::MAX_LEN)).is_ok());
+        assert!(BoardName::parse(&"é".repeat(BoardName::MAX_LEN + 1)).is_err());
     }
 }

@@ -1,7 +1,9 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use domain::boards::errors::BoardError;
-use domain::boards::model::{Board, BoardCode, BoardCursor, BoardId, BoardListQuery, NewBoard};
+use domain::boards::model::{
+    Board, BoardCode, BoardCursor, BoardId, BoardListQuery, BoardName, NewBoard,
+};
 use domain::boards::port::BoardRepository;
 use domain::pagination::SortField as _;
 use sqlx::PgPool;
@@ -22,13 +24,11 @@ impl TryFrom<BoardRow> for Board {
     type Error = anyhow::Error;
 
     fn try_from(row: BoardRow) -> Result<Self, Self::Error> {
+        let name = BoardName::parse(&row.name).map_err(|e| anyhow::anyhow!(e))?;
         let code = BoardCode::parse(&row.code).map_err(|e| anyhow::anyhow!(e))?;
         Ok(Board::new(
             BoardId::from(row.id),
-            NewBoard {
-                name: row.name,
-                code,
-            },
+            NewBoard { name, code },
             row.created_at,
             row.updated_at,
         ))
@@ -55,7 +55,7 @@ impl BoardRepository for PgBoardRepository {
             VALUES ($1, $2)
             RETURNING id, name, code, created_at, updated_at
             "#,
-            new_board.name,
+            new_board.name.as_ref(),
             new_board.code.as_ref(),
         )
         .fetch_one(&self.pool)

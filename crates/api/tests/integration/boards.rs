@@ -94,6 +94,42 @@ async fn list_boards_returns_empty_list(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../../migrations")]
+async fn list_boards_default_sort_traverses_all_pages_newest_first(pool: PgPool) {
+    let app = TestApp::new(pool);
+    for (name, code) in [
+        ("Peel DSB", "PDSB"),
+        ("Toronto DSB", "TDSB"),
+        ("Halton DSB", "HDSB"),
+    ] {
+        create_board(&app, name, code).await;
+    }
+
+    let mut codes = Vec::new();
+    let mut uri = "/api/v1/boards?limit=2".to_string();
+    loop {
+        let body = body_json(app.get_as_admin(&uri).await).await;
+        for b in body["data"].as_array().unwrap() {
+            codes.push(b["code"].as_str().unwrap().to_string());
+        }
+        match body["meta"]["next_cursor"].as_str() {
+            Some(cursor) => uri = format!("/api/v1/boards?limit=2&after={cursor}"),
+            None => break,
+        }
+    }
+
+    assert_eq!(codes, ["HDSB", "TDSB", "PDSB"]);
+}
+
+#[sqlx::test(migrations = "../../migrations")]
+async fn list_boards_returns_400_on_invalid_cursor(pool: PgPool) {
+    let app = TestApp::new(pool);
+
+    let response = app.get_as_admin("/api/v1/boards?after=not-a-cursor").await;
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+}
+
+#[sqlx::test(migrations = "../../migrations")]
 async fn list_boards_sorted_by_name_traverses_all_pages(pool: PgPool) {
     let app = TestApp::new(pool);
     for (name, code) in [

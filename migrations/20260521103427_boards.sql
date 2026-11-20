@@ -6,8 +6,9 @@ CREATE TABLE boards (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Board codes are compared case-insensitively
-CREATE UNIQUE INDEX boards_code_key ON boards (lower(code));
+-- Codes are normalized to uppercase by the application, so a plain unique index
+-- gives case-insensitive uniqueness and serves `WHERE code = $1` lookups.
+CREATE UNIQUE INDEX boards_code_key ON boards (code);
 
 CREATE TRIGGER boards_set_updated_at
 BEFORE UPDATE ON boards

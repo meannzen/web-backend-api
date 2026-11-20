@@ -110,7 +110,7 @@ pub async fn create_board(
     State(board_service): State<Arc<BoardService>>,
     ValidatedJson(req): ValidatedJson<CreateBoardRequest>,
 ) -> AppResult<(StatusCode, Json<BoardResponse>)> {
-    let board = board_service.create(req.name, &req.code).await?;
+    let board = board_service.create(&req.name, &req.code).await?;
 
     tracing::info!(board_id = %board.id().as_uuid(), "board created");
 
