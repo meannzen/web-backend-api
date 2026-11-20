@@ -1,6 +1,11 @@
 use std::collections::HashMap;
+use std::time::Duration;
 
-use axum::{Json, http::StatusCode, response::IntoResponse};
+use axum::{
+    Json,
+    http::{StatusCode, header},
+    response::IntoResponse,
+};
 
 #[derive(Debug, thiserror::Error)]
 pub enum AppError {
@@ -24,6 +29,9 @@ pub enum AppError {
 
     #[error("{0}")]
     Conflict(String),
+
+    #[error("service is busy, retry later")]
+    ServiceUnavailable { retry_after: Duration },
 
     #[error(transparent)]
     Internal(#[from] anyhow::Error),
@@ -56,6 +64,9 @@ impl From<domain::users::errors::UserError> for AppError {
             domain::users::errors::UserError::NotFound => AppError::NotFound,
             domain::users::errors::UserError::InvalidCredentials => AppError::InvalidCredentials,
             domain::users::errors::UserError::InvalidEmail(msg) => AppError::Validation(msg),
+            domain::users::errors::UserError::Busy { retry_after } => {
+                AppError::ServiceUnavailable { retry_after }
+            }
             domain::users::errors::UserError::Internal(e) => AppError::Internal(e),
         }
     }
@@ -82,6 +93,23 @@ impl IntoResponse for AppError {
             }
             AppError::Forbidden => (StatusCode::FORBIDDEN, "forbidden", self.to_string()),
             AppError::Conflict(msg) => (StatusCode::CONFLICT, "conflict", msg.clone()),
+            AppError::ServiceUnavailable { retry_after } => {
+                let body = serde_json::json!({
+                    "error": {
+                        "type": "service_unavailable",
+                        "message": self.to_string(),
+                    }
+                });
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    [(
+                        header::RETRY_AFTER,
+                        retry_after_secs(*retry_after).to_string(),
+                    )],
+                    Json(body),
+                )
+                    .into_response();
+            }
             AppError::Internal(err) => {
                 tracing::error!(error = ?err, "internal server error");
                 (
@@ -100,5 +128,23 @@ impl IntoResponse for AppError {
         });
 
         (status, Json(body)).into_response()
+    }
+}
+
+/// `Retry-After` takes whole seconds: round up, and never tell clients to retry immediately.
+fn retry_after_secs(d: Duration) -> u64 {
+    (d.as_secs_f64().ceil() as u64).max(1)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn retry_after_rounds_up_to_whole_seconds() {
+        assert_eq!(retry_after_secs(Duration::ZERO), 1);
+        assert_eq!(retry_after_secs(Duration::from_millis(10)), 1);
+        assert_eq!(retry_after_secs(Duration::from_secs(2)), 2);
+        assert_eq!(retry_after_secs(Duration::from_millis(2500)), 3);
     }
 }

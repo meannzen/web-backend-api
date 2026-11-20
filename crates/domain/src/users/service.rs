@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::ports::password_hasher::PasswordHasher;
+use crate::ports::password_hasher::{PasswordHasher, PasswordHasherError};
 use crate::users::errors::UserError;
 use crate::users::model::{Email, NewUser, Role, User, UserCursor, UserId, UserListQuery};
 use crate::users::port::UserRepository;
@@ -24,11 +24,7 @@ impl UserService {
         role: Role,
     ) -> Result<User, UserError> {
         let email = Email::parse(email).map_err(UserError::InvalidEmail)?;
-        let password_hash = self
-            .hasher
-            .hash(password)
-            .await
-            .map_err(UserError::Internal)?;
+        let password_hash = self.hasher.hash(password).await?;
         self.repo
             .create(NewUser {
                 email,
@@ -51,11 +47,7 @@ impl UserService {
 
         match lookup {
             Ok(user) => {
-                let valid = self
-                    .hasher
-                    .verify(&password, user.password_hash())
-                    .await
-                    .map_err(UserError::Internal)?;
+                let valid = self.hasher.verify(&password, user.password_hash()).await?;
                 if valid {
                     Ok(user)
                 } else {
@@ -63,8 +55,13 @@ impl UserService {
                 }
             }
             Err(UserError::NotFound) => {
-                // Discard the result; we only care about the time spent.
-                let _ = self.hasher.verify(&password, DUMMY_HASH).await;
+                // Discard the result; we only care about the time spent. Busy still has
+                // to surface, otherwise unknown emails would get 401 where known ones get 503.
+                if let Err(PasswordHasherError::Busy { retry_after }) =
+                    self.hasher.verify(&password, DUMMY_HASH).await
+                {
+                    return Err(UserError::Busy { retry_after });
+                }
                 Err(UserError::InvalidCredentials)
             }
             Err(other) => Err(other),

@@ -31,9 +31,24 @@ validator = { version = "0.20", features = ["derive"] }
 base64 = "0.22"
 utoipa = { version = "5.5.0", features = ["axum_extras", "uuid", "chrono"] }
 utoipa-swagger-ui = { version = "9", features = ["axum"] }
+criterion = { version = "0.5", features = ["html_reports"] }
 
 [profile.release]
 opt-level = "z"    # optimize for size
 lto = true         # link-time optimization
 codegen-units = 1  # better optimization, slower compile
 strip = true       # strip debug symbols
+
+# Release build tuned for speed with symbols kept, for flamegraphs/samply and load tests:
+#   cargo build --profile profiling -p api
+[profile.profiling]
+inherits = "release"
+opt-level = 3
+strip = false
+debug = "line-tables-only"
+
+# cargo bench uses this profile; keep it speed-optimized rather than inheriting opt-level = "z"
+[profile.bench]
+opt-level = 3
+strip = false
+debug = "line-tables-only"

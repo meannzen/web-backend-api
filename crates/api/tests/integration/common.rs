@@ -73,6 +73,7 @@ impl TestApp {
                 require_ssl: false,
                 max_connections: 5,
             },
+            password_hasher: Default::default(),
         };
         let db = Database::from_pool(pool);
         let state = AppState::new(config, db);

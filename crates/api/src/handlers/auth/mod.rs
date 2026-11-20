@@ -24,6 +24,7 @@ use crate::state::AppState;
         (status = 201, description = "User registered", body = UserResponse),
         (status = 400, description = "Invalid input", body = crate::dtos::common::ErrorResponse),
         (status = 409, description = "Email already taken", body = crate::dtos::common::ErrorResponse),
+        (status = 503, description = "Password hasher at capacity, retry later", body = crate::dtos::common::ErrorResponse),
     )
 )]
 #[axum::debug_handler(state = crate::state::AppState)]
@@ -51,6 +52,7 @@ pub async fn register(
     responses(
         (status = 200, description = "Login successful", body = TokenResponse),
         (status = 401, description = "Invalid credentials", body = crate::dtos::common::ErrorResponse),
+        (status = 503, description = "Password hasher at capacity, retry later", body = crate::dtos::common::ErrorResponse),
     )
 )]
 #[axum::debug_handler(state = crate::state::AppState)]
